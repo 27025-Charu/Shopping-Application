@@ -1,7 +1,7 @@
-﻿using ShoppingApp.Model;
+﻿using ShoppingApplication.Model;
 using Newtonsoft.Json;
 
-namespace ShoppingApp
+namespace ShoppingApplication
 {
     internal class UserRepository
     {
@@ -20,7 +20,7 @@ namespace ShoppingApp
             return _users.Any(u => u.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
         }
 
-        internal User GetUser(string username)
+        internal User? GetUser(string username)
         {
             return _users.FirstOrDefault(u => u.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
         }

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShoppingApp.Service
+namespace ShoppingApplication.Service
 {
     public static class Logger
     {
@@ -25,7 +25,6 @@ namespace ShoppingApp.Service
         public static void Info(string msg) => Write("INFO", msg, true);
         public static void Warn(string msg) => Write("WARN", msg, true);
         public static void Error(string msg) => Write("ERROR", msg, true);
-        public static void Crash(Exception ex) => Write("CRASH", ex.ToString(), false);
 
         public static string[] RecentLog()
         {

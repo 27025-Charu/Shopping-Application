@@ -1,10 +1,10 @@
-﻿using ShoppingApp.Model;
-using ShoppingApp.Service;
+﻿using ShoppingApplication.Model;
+using ShoppingApplication.Service;
 using System;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ShoppingApp
+namespace ShoppingApplication
 {
     internal class AuthService
     {
@@ -32,6 +32,14 @@ namespace ShoppingApp
             CurrentUser = user;
             Logger.Info($"User - {user.Username} logged in.");
             return true;
+        }
+        public void Logout()
+        {
+            if (CurrentUser != null)
+            {
+                Logger.Info($"User - {CurrentUser.Username} logged out.");
+            }
+            CurrentUser = null;
         }
 
         internal void Register(User newUser, string password)

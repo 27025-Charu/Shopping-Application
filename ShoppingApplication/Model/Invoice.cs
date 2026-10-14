@@ -1,10 +1,10 @@
-﻿using ShoppingApp.Model;
+﻿using ShoppingApplication.Model;
 
 namespace ShoppingApplication.Model
 {
     public class Invoice
     {
-        public string No { get; set; } = "";
+        public string Number { get; set; } = "";
         public DateTime Date { get; set; }
         public User Customer { get; set; } = new();
         public List<CartItem> Items { get; set; } = new();
