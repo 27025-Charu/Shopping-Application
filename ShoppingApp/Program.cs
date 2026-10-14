@@ -14,7 +14,7 @@ namespace ShoppingApp
             UserRepository userRepository = new UserRepository();
             UserService userService = new UserService(userRepository);
             UserView userView=new UserView(userService);
-            userView.DisplayMenu();
+            userView.RunApplicationLoop();
             Console.WriteLine("Thank you for your visit...");
         }
     }
