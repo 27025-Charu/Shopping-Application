@@ -1,4 +1,5 @@
 ﻿using ShoppingApplication.Repository;
+using ShoppingApplication.View;
 
 namespace ShoppingApplication
 {

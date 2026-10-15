@@ -47,6 +47,39 @@ namespace ShoppingApplication
                 Logger.Info($"Product - {product.Name} with quantity - {qty} is added to cart");
             }
         }
+        public bool AddQuantity(Product product, int qty)
+        {
+            if (qty <= 0)
+            {
+                return false;
+            }
+
+            if (_items.ContainsKey(product.Id))
+            {
+                int currentQuantity = _items[product.Id].Quantity;
+                int newQuantity = currentQuantity + qty;
+                if (newQuantity > 5)
+                {
+                    return false;
+                }
+
+                _items[product.Id].Quantity = newQuantity;
+                Logger.Info($"Product - {product.Name} quantity updated to {newQuantity} in cart.");
+                return true;
+            }
+            else
+            {
+                if (qty > 5)
+                {
+                    return false;
+                }
+
+                _items[product.Id] = new CartItem { Product = product, Quantity = qty };
+                Logger.Info($"Product - {product.Name} with quantity - {qty} is added to cart.");
+                return true;
+            }
+        }
+
 
         public void Clear()
         {

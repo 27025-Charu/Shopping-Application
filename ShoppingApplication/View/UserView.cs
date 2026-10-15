@@ -1,11 +1,12 @@
 ﻿using ShoppingApplication.Model;
 using ShoppingApplication.Repository;
+using ShoppingApplication.service;
 using ShoppingApplication.Service;
 using Spectre.Console;
 using System.Globalization;
 using System.Text;
 
-namespace ShoppingApplication
+namespace ShoppingApplication.View
 {
     internal class UserView
     {
@@ -14,7 +15,7 @@ namespace ShoppingApplication
         private readonly ProductRepository _products;
         private readonly InvoiceService _invoices;
         private const int MaxAttempts = 3;
-        private const int LogLines = 4;
+        private const int NoticeLines = 3;
         private const int MaxCartLines = 4;
 
         public UserView(AuthService auth, CartService cart, ProductRepository products, InvoiceService invoices)
@@ -60,6 +61,7 @@ Enter choice: ");
                         return;
                     default:
                         Logger.Warn("Invalid menu choice");
+                        Console.WriteLine(" Invalid choice. Please enter 1, 2 or 3.");
                         Console.WriteLine(" Press any key to continue...");
                         Console.ReadKey(true);
                         break;
@@ -89,7 +91,7 @@ Enter choice: ");
 
                 if (_auth.Login(username, password))
                 {
-                    Console.WriteLine("\n[SUCCESS] Login successful!\nLoading home screen...");
+                    Console.WriteLine("\n[SUCCESS] Login successful!\n Loading homescreen...");
                     Thread.Sleep(1000);
                     return true;
                 }
@@ -166,7 +168,7 @@ Enter choice: ");
             while (true)
             {
                 ClearScreen();
-                Console.WriteLine($"Welcome, {_auth.CurrentUser!.FirstName}! Happy shopping! \n");
+                Console.WriteLine($"Welcome, {_auth.CurrentUser!.FirstName}");
                 AnsiConsole.MarkupLine("[bold black on cyan] [[C]] CART [/]\t[bold black on cyan] [[X]] LOGOUT [/]\t[bold black on cyan] [[R]] RESET PASSWORD [/]");
                 Console.WriteLine("==================================================");
 
@@ -174,8 +176,9 @@ Enter choice: ");
                 DrawNotificationsAndCart();
 
                 AnsiConsole.Write(new Rule("[bold yellow]YOUR CHOICE[/]").LeftJustified());
-                Console.Write("Enter Product ID to add / edit quantity (or C = Cart, X = Logout, R = Reset password): ");
+                Console.Write("Enter Product ID to add / edit quantity/ Remove product (or C = Cart, X = Logout): ");
                 var input = (Console.ReadLine() ?? "").Trim();
+
                 switch (input.ToUpper())
                 {
                     case "":
@@ -183,12 +186,14 @@ Enter choice: ");
                     case "X":
                         _auth.Logout();
                         _cart.Clear();
+                        Notifier.Clear();
                         return;
                     case "C":
                         Logger.Info("Cart opened");
                         CartPage();
                         break;
                     case "R":
+
                         break;
                     default:
                         ProcessProductSelection(input);
@@ -197,8 +202,87 @@ Enter choice: ");
             }
         }
 
+        private void DrawProducts()
+        {
+            var table = new Table()
+                .Border(TableBorder.Rounded)
+                .AddColumn("[blue]Category[/]")
+                .AddColumn(new TableColumn("[green]ID[/]").Centered())
+                .AddColumn("[green]Product Name[/]")
+                .AddColumn(new TableColumn("[green]Price[/]").RightAligned());
+
+            foreach (var group in _products.GetAll().GroupBy(p => p.Category))
+            {
+                var firstRow = true;
+                foreach (var p in group)
+                {
+                    table.AddRow(
+                        firstRow ? $"[bold red]{Markup.Escape(group.Key.ToUpper())}[/]" : "",
+                        Markup.Escape(p.Id.ToString()),
+                        Markup.Escape(p.Name),
+                        $"Rs. {p.Price}");
+                    firstRow = false;
+                }
+            }
+            AnsiConsole.Write(table);
+        }
+
+        private void DrawNotificationsAndCart()
+        {
+            var notices = Notifier.Latest(NoticeLines)
+                .Select(n => $"[{Color(n.Level)}]> {Markup.Escape(Trim(n.Message, 48))}[/]")
+                .ToList();
+            if (notices.Count == 0)
+            {
+                notices.Add("[grey]> No notifications yet[/]");
+            }
+
+            var items = _cart.Items.ToList();
+            var cartLines = items
+                .Take(MaxCartLines)
+                .Select(i => $"{i.Product.Id} {Trim(i.Product.Name, 18)} x{i.Quantity}  Rs. {i.Total:N0}")
+                .ToList();
+            if (items.Count == 0)
+            {
+                cartLines.Add("Cart is empty");
+            }
+            else if (items.Count > MaxCartLines)
+            {
+                cartLines.Add($"...and {items.Count - MaxCartLines} more item(s)");
+            }
+            cartLines.Add($"Items: {_cart.Count}   Total: Rs. {_cart.Total:N0}/-");
+
+            var panel = new Table()
+                .Border(TableBorder.Rounded)
+                .Expand()
+                .AddColumn("[bold cyan]NOTIFICATIONS[/]")
+                .AddColumn("[bold green]LIVE CART[/]");
+
+            panel.AddRow(new Markup(string.Join("\n", notices)), new Text(string.Join("\n", cartLines)));
+            AnsiConsole.Write(panel);
+        }
+
+        private static string Color(NotificationLevel level)
+        {
+            if (level == NotificationLevel.Success)
+            {
+                return "green";
+            }
+            else if (level == NotificationLevel.Warning)
+            {
+                return "yellow";
+            }
+            else
+            {
+                return "red";
+            }
+        }
+
+
         private void CartPage()
         {
+            var Id = Notifier.Id;
+
             while (true)
             {
                 ClearScreen();
@@ -206,25 +290,29 @@ Enter choice: ");
 
                 if (_cart.IsEmpty)
                 {
-                    Console.WriteLine("\n[[ Your cart is empty ]]\n");
+                    Console.WriteLine("\n[ Your cart is empty ]\n");
                 }
                 else
                 {
-                    Console.WriteLine($"{"ID"}\t{"Product"}\t{"Qty"}\t{"Total"}");
+                    Console.WriteLine($"{"ID"} {"Product"} {"Qty"} {"Total"}");
                     foreach (var i in _cart.Items)
                     {
-                        Console.WriteLine($"{i.Product.Id} {i.Product.Name} {i.Quantity} {i.Total}");
+                        Console.WriteLine($"{i.Product.Id} {i.Product.Name} {i.Quantity} {i.Total:N0}");
                     }
-
                     Console.WriteLine($@"
 ---------------------------------------------
-Grand Total: Rs {_cart.Total}
----------------------------------------------");
+Grand Total: Rs {_cart.Total:N0}");
                 }
-                Console.ResetColor();
 
                 Console.WriteLine("==============================================");
-                Console.WriteLine(@"[E] Edit Qty   [R] Remove   
+
+                var latest = Notifier.LastAfter(Id);
+                if (latest != null)
+                {
+                    AnsiConsole.MarkupLine($"[{Color(latest.Level)}]> {Markup.Escape(latest.Message)}[/]");
+                }
+
+                Console.Write(@"[E] Edit Qty   [R] Remove   
 [K] Checkout   [B] Back
 
 Choice: ");
@@ -242,7 +330,8 @@ Choice: ");
                     case ConsoleKey.K:
                         if (_cart.IsEmpty)
                         {
-                            Logger.Warn("Cart is empty. Add products first.");
+                            Logger.Warn("Checkout attempted with an empty cart");
+                            Notifier.Warning("Your cart is empty. Add products first.");
                             break;
                         }
                         if (CheckoutPage())
@@ -256,6 +345,7 @@ Choice: ");
 
                     default:
                         Logger.Warn("Invalid option choice.");
+                        Notifier.Warning("Please choose E, R, K or B.");
                         break;
                 }
             }
@@ -266,9 +356,9 @@ Choice: ");
             var user = _auth.CurrentUser!;
             ClearScreen();
             Console.WriteLine($@"=========== CHECKOUT ===========
-Customer       : {user.FullName} (UserName - {user.Username})
-Items count    : {_cart.Count}
-Total amount   : Rs. {_cart.Total}/-
+Customer : {user.FullName} (UserName - {user.Username})
+Items    : {_cart.Count}
+Total    : Rs. {_cart.Total:N0}/-
 --------------------------------");
             Console.Write(" Confirm payment? (Y/N): ");
             if (Console.ReadLine()?.Trim().ToUpper() != "Y")
@@ -288,12 +378,14 @@ Total amount   : Rs. {_cart.Total}/-
                 var path = _invoices.CreatePdf(invoice);
                 Logger.Info($"Invoice PDF saved: {path}");
                 Console.WriteLine($"\n[SUCCESS] Invoice saved to: {path}");
+                Notifier.Success($"Payment successful. Invoice {invoice.Number} saved.");
             }
             catch (Exception ex)
             {
                 Logger.Error($"Invoice PDF wasn't generated due to : {ex.Message}");
                 Logger.Error(ex.ToString());
                 Console.WriteLine("\n[ERROR] Payment done, but the PDF could not be created.");
+                Notifier.Error("Payment done, but the invoice PDF could not be created.");
             }
 
             _cart.Clear();
@@ -312,11 +404,11 @@ Name: {invoice.Customer.FullName}
 ==================================");
             foreach (var i in invoice.Items)
             {
-                Console.WriteLine($"Id: {i.Product.Id} Name: {i.Product.Name} Quantity: {i.Quantity} * Product price:{i.Product.Price} = {i.Total}");
+                Console.WriteLine($"Id: {i.Product.Id} Name: {i.Product.Name} Quantity: {i.Quantity} * Product price:{i.Product.Price:N0} = {i.Total:N0}");
             }
             Console.WriteLine($@"
 -----------------------------------
-TOTAL: Rs {invoice.Total} PAID
+TOTAL: Rs {invoice.Total:N0} PAID
 -----------------------------------");
         }
 
@@ -324,7 +416,8 @@ TOTAL: Rs {invoice.Total} PAID
         {
             if (_cart.IsEmpty)
             {
-                Logger.Warn("Cart is empty.");
+                Logger.Warn("Edit/remove attempted with an empty cart");
+                Notifier.Warning("Your cart is empty.");
                 return;
             }
 
@@ -333,74 +426,13 @@ TOTAL: Rs {invoice.Total} PAID
             var product = _products.GetById(id);
             if (product == null || !_cart.Contains(product.Id))
             {
-                Logger.Warn($"Product Id- '{id}' is not in your cart");
+                Logger.Warn($"Product Id - '{id}' is not in your cart");
+                Notifier.Warning($"'{id}' is not in your cart.");
                 return;
             }
 
-            var qty = remove ? 0 : ReadInt(" New quantity (0 = remove): ", 0, CartService.MaxQty);
-            _cart.SetQuantity(product, qty);
-        }
-
-        private void DrawProducts()
-        {
-            var table = new Table()
-                .Border(TableBorder.Rounded)
-                .AddColumn(new TableColumn("[bold]Category[/]").LeftAligned())
-                .AddColumn(new TableColumn("[blue]ID[/]").LeftAligned())
-                .AddColumn(new TableColumn("[green]Product Name[/]").LeftAligned())
-                .AddColumn(new TableColumn("[magenta]Price[/]").RightAligned());
-
-
-            foreach (var group in _products.GetAll().GroupBy(p => p.Category))
-            {
-                var firstRow = true;
-                foreach (var p in group)
-                {
-                    table.AddRow(
-                        firstRow ? $"[bold yellow]{Markup.Escape(group.Key.ToUpper())}[/]" : "",
-                        Markup.Escape(p.Id.ToString()),
-                        Markup.Escape(p.Name),
-                        $"Rs. {p.Price:N0}/-");
-                    firstRow = false;
-                }
-            }
-            AnsiConsole.Write(table);
-        }
-
-        private void DrawNotificationsAndCart()
-        {
-            var logs = Logger.RecentLog()
-                .TakeLast(LogLines)
-                .Select(l => "> " + Trim(l, 48))
-                .ToList();
-            if (logs.Count == 0)
-            {
-                logs.Add("> No notifications yet");
-            }
-
-            var items = _cart.Items.ToList();
-            var cartLines = items
-                .Take(MaxCartLines)
-                .Select(i => $"{i.Product.Id} {Trim(i.Product.Name, 18)} x{i.Quantity}  Rs. {i.Total:N0}")
-                .ToList();
-            if (items.Count == 0)
-            {
-                cartLines.Add("Cart is empty");
-            }
-            else if (items.Count > MaxCartLines)
-            {
-                cartLines.Add($"... and {items.Count - MaxCartLines} more item(s)");
-            }
-            cartLines.Add($"Items: {_cart.Count}   Total: Rs. {_cart.Total:N0}/-");
-
-            var panel = new Table()
-                .Border(TableBorder.Rounded)
-                .Expand()
-                .AddColumn("[bold cyan]NOTIFICATIONS[/]")
-                .AddColumn("[bold green]LIVE CART[/]");
-
-            panel.AddRow(new Text(string.Join("\n", logs)), new Text(string.Join("\n", cartLines)));
-            AnsiConsole.Write(panel);
+            var qty = remove ? 0 : ReadInt("New quantity (0 = remove): ", 0, CartService.MaxQty);
+            ApplyQuantity(product, qty, alreadyInCart: true);
         }
 
         private void ProcessProductSelection(string productId)
@@ -409,6 +441,7 @@ TOTAL: Rs {invoice.Total} PAID
             if (product == null)
             {
                 Logger.Warn($"Invalid product ID '{productId}'");
+                Notifier.Warning($"Product ID '{productId}' was not found.");
                 return;
             }
 
@@ -416,12 +449,30 @@ TOTAL: Rs {invoice.Total} PAID
             {
                 var current = _cart.GetQty(product.Id);
                 var qty = ReadInt($"Already in cart ({current}). New quantity (0 = remove): ", 0, CartService.MaxQty);
-                _cart.SetQuantity(product, qty);
+                ApplyQuantity(product, qty, alreadyInCart: true);
             }
             else
             {
                 var qty = ReadInt($"Quantity for {product.Name} (1-{CartService.MaxQty}): ", 1, CartService.MaxQty);
-                _cart.SetQuantity(product, qty);
+                ApplyQuantity(product, qty, alreadyInCart: false);
+            }
+        }
+
+        private void ApplyQuantity(Product product, int qty, bool alreadyInCart)
+        {
+            _cart.SetQuantity(product, qty);
+
+            if (qty == 0)
+            {
+                Notifier.Success($"{product.Name} removed from cart");
+            }
+            else if (alreadyInCart)
+            {
+                Notifier.Success($"{product.Name} quantity updated to {qty}");
+            }
+            else
+            {
+                Notifier.Success($"{product.Name} x{qty} added to cart");
             }
         }
 
@@ -433,10 +484,7 @@ TOTAL: Rs {invoice.Total} PAID
                 Console.Write(prompt);
                 var value = (Console.ReadLine() ?? "").Trim();
                 var error = validate(value);
-                if (error == null)
-                {
-                    return value;
-                }
+                if (error == null) return value;
                 Console.WriteLine($"[ERROR] {error}");
             }
         }
@@ -446,10 +494,7 @@ TOTAL: Rs {invoice.Total} PAID
             while (true)
             {
                 Console.Write(prompt);
-                if (int.TryParse(Console.ReadLine(), out var n) && n >= min && n <= max)
-                {
-                    return n;
-                }
+                if (int.TryParse(Console.ReadLine(), out var n) && n >= min && n <= max) return n;
                 Console.WriteLine($"[ERROR] Enter a number between {min} and {max}.");
             }
         }
@@ -493,8 +538,8 @@ TOTAL: Rs {invoice.Total} PAID
                 return "...";
             }
 
-            string text = input[..(maxLength - 3)];
-            return text + "...";
+            string truncatedText = input[..(maxLength - 3)];
+            return truncatedText + "...";
         }
     }
 }
