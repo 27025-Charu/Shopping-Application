@@ -13,7 +13,7 @@ namespace ShoppingApplication.Repository
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             if (!File.Exists(_path))
             {
-                File.WriteAllText(_path, JsonConvert.SerializeObject(Seed(), Formatting.Indented));
+                File.WriteAllText(_path, JsonConvert.SerializeObject(Mock(), Formatting.Indented));
             }
 
             _products = JsonConvert.DeserializeObject<List<Product>>(File.ReadAllText(_path)) ?? new();
@@ -29,7 +29,7 @@ namespace ShoppingApplication.Repository
             return _products.FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
         }
 
-        private static List<Product> Seed() => new()
+        private static List<Product> Mock() => new()
         {
         new() { Id = "G101", Name = "Game Controller",    Category = "Gaming",      Price = 2499 },
         new() { Id = "G102", Name = "Gaming Headset",     Category = "Gaming",      Price = 1999 },

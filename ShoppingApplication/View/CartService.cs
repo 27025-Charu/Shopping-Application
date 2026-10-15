@@ -1,5 +1,5 @@
-﻿using ShoppingApplication.Service;
-using ShoppingApplication.Model;
+﻿using ShoppingApplication.Model;
+using ShoppingApplication.Service;
 
 namespace ShoppingApplication
 {
@@ -9,7 +9,7 @@ namespace ShoppingApplication
         private readonly Dictionary<string, CartItem> _items = new(StringComparer.OrdinalIgnoreCase);
 
         public IReadOnlyCollection<CartItem> Items => _items.Values;
-        public int Count => _items.Values.Sum(i => i.Quantity);
+        public int Count => _items.Values.Count();
         public decimal Total => _items.Values.Sum(i => i.Total);
         public bool IsEmpty => _items.Count == 0;
 
@@ -19,7 +19,7 @@ namespace ShoppingApplication
         }
         public int GetQty(string id)
         {
-            if(_items.TryGetValue(id, out var i))
+            if (_items.TryGetValue(id, out var i))
             {
                 return i.Quantity;
             }

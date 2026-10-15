@@ -1,6 +1,5 @@
 ﻿using ShoppingApplication.Model;
 using ShoppingApplication.Service;
-using System;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -33,6 +32,7 @@ namespace ShoppingApplication
             Logger.Info($"User - {user.Username} logged in.");
             return true;
         }
+
         public void Logout()
         {
             if (CurrentUser != null)
