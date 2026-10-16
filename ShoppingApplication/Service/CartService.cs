@@ -16,6 +16,7 @@ namespace ShoppingApplication.Service
         {
             return _items.ContainsKey(id);
         }
+
         public int GetQty(string id)
         {
             if (_items.TryGetValue(id, out var i))
@@ -27,6 +28,7 @@ namespace ShoppingApplication.Service
                 return 0;
             }
         }
+
         public void SetQuantity(Product product, int qty)
         {
             if (qty <= 0)
@@ -50,6 +52,24 @@ namespace ShoppingApplication.Service
         public void Clear()
         {
             _items.Clear();
+        }
+
+        public void SaveSession(string username)
+        {
+            CartPersistence.Save(username, _items.Values);
+        }
+
+        public void LoadSession(string username)
+        {
+            _items.Clear();
+            var savedItems = CartPersistence.Load(username);
+            foreach (var item in savedItems)
+            {
+                if (item?.Product != null)
+                {
+                    _items[item.Product.Id] = item;
+                }
+            }
         }
     }
 }

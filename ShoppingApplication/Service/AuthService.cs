@@ -12,11 +12,13 @@ namespace ShoppingApplication
         public const int MaxAddresses = 5;
 
         private readonly UserRepository _repo;
+        CartService _cart;
         public User? CurrentUser { get; private set; }
 
-        public AuthService(UserRepository repo)
+        public AuthService(UserRepository repo, CartService cart)
         {
             _repo = repo;
+            _cart = cart;
         }
 
         public bool UserNameExists(string username)
@@ -41,6 +43,8 @@ namespace ShoppingApplication
         {
             if (CurrentUser != null)
             {
+                _cart.SaveSession(CurrentUser.Username);
+                _cart.Clear();
                 Logger.Info($"User - {CurrentUser.Username} logged out.");
             }
             CurrentUser = null;

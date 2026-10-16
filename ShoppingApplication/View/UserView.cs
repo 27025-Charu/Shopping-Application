@@ -119,6 +119,7 @@ Enter choice: ");
                 if (_auth.Login(username, password))
                 {
                     Console.WriteLine("\n[SUCCESS] Login successful!");
+                    _cart.LoadSession(username);
                     Thread.Sleep(1000);
                     return true;
                 }
@@ -206,50 +207,68 @@ Enter choice: ");
         {
             ClearScreen();
             Console.WriteLine("========== SIGN UP ==========");
-            var first = ReadValid("First Name       : ", Validator.FirstName);
-            var last = ReadValid("Last Name (opt)  : ", Validator.LastName);
-            var dobText = ReadValid("DOB (DD/MM/YYYY): ", Validator.Dob);
-            var phone = ReadValid("Phone Number     : ", Validator.Phone);
-            var username = ReadValid("Username         : ", name =>
+            if (!ReadValidWithLimit("First Name       : ", Validator.FirstName, out string first))
             {
-                var formatValidation = Validator.Username(name);
-                if (formatValidation is not null)
-                {
-                    return formatValidation;
-                }
+                return false;
+            }
+            if (!ReadValidWithLimit("Last Name (opt)  : ", Validator.LastName, out string last))
+            {
+                return false;
+            }
+            if (!ReadValidWithLimit("DOB (DD/MM/YYYY): ", Validator.Dob, out string dobText))
+            {
+                return false;
+            }
+            if (!ReadValidWithLimit("Phone Number     : ", Validator.Phone, out string phone))
+            {
+                return false;
+            }
+            bool usernameValid = ReadValidWithLimit("Username         : ", AvailableUsername, out string username);
 
-                if (_auth.UserNameExists(name))
-                {
-                    return "Username already taken.";
-                }
-                return null;
-            });
+            if (!usernameValid)
+            {
+                return false;
+            }
 
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Password: 8+ chars, 1 upper, 1 lower, 1 number, 1 special");
             Console.ResetColor();
-            string password;
-            while (true)
+
+            string password = string.Empty;
+            const int MaxAttempts = 3;
+            bool passwordSetupSuccess = false;
+
+            for (int attempt = 1; attempt <= MaxAttempts; attempt++)
             {
                 Console.Write("Password : ");
                 password = ReadPassword();
+
                 var formatValidation = Validator.Password(password);
                 if (formatValidation != null)
                 {
-                    Console.WriteLine($"[ERROR] {formatValidation}");
+                    Console.WriteLine($"[ERROR] {formatValidation} (Attempt {attempt}/{MaxAttempts})");
                     continue;
                 }
 
                 Console.Write("Confirm Password : ");
                 if (ReadPassword() == password)
                 {
+                    passwordSetupSuccess = true;
                     break;
                 }
-                Console.WriteLine("[ERROR] Passwords do not match. Try again.");
+
+                Console.WriteLine($"[ERROR] Passwords do not match. (Attempt {attempt}/{MaxAttempts})");
+            }
+
+            if (!passwordSetupSuccess)
+            {
+                Failure("Too many invalid password attempts.");
+                return false;
             }
 
             var addresses = new List<Address>();
             Console.Write("\nAdd a delivery address now? (Y/N, optional): ");
+
             while ((Console.ReadLine() ?? "").Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
             {
                 addresses.Add(ReadAddress());
@@ -270,10 +289,62 @@ Enter choice: ");
                 Username = username,
                 Addresses = addresses
             };
+
             _auth.Register(user, password);
             Console.WriteLine("\n[SUCCESS] Account created! Redirecting to Dashboard...");
             Thread.Sleep(1000);
             return true;
+        }
+
+        private string AvailableUsername(string name)
+        {
+            var formatError = Validator.Username(name);
+            if (formatError is not null)
+            {
+                return formatError;
+            }
+            if (_auth.UserNameExists(name))
+            {
+                return "Username already taken.";
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        private bool ReadValidWithLimit(string prompt, Func<string, string> validator, out string result)
+        {
+            const int MaxAttempts = 3;
+
+            for (int attempt = 1; attempt <= MaxAttempts; attempt++)
+            {
+                Console.Write(prompt);
+                string input = (Console.ReadLine() ?? "").Trim();
+
+                string error = validator(input);
+                if (error == null)
+                {
+                    result = input;
+                    return true;
+                }
+
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[ERROR] {error} (Attempt {attempt}/{MaxAttempts})");
+                Console.ResetColor();
+            }
+
+            result = string.Empty;
+            Failure("Too many invalid field input attempts.");
+            return false;
+        }
+
+        private void Failure(string explicitReason)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n[ERROR] Registration failed. {explicitReason}");
+            Console.ResetColor();
+            Thread.Sleep(2000);
         }
 
         private static Address ReadAddress()
@@ -292,23 +363,19 @@ Enter choice: ");
             {
                 DrawDashboard();
                 var input = ReadLineWithResize(DashboardPrompt, DrawDashboard).Trim();
-
                 switch (input.ToUpper())
                 {
                     case "":
                         break;
-
                     case "X":
                         _auth.Logout();
                         _cart.Clear();
                         Notifier.Clear();
                         return;
-
                     case "C":
                         Logger.Info("Cart opened");
                         CartPage();
                         break;
-
                     default:
                         ProcessProductSelection(input);
                         break;
@@ -384,7 +451,7 @@ Enter choice: ");
             var items = _cart.Items.ToList();
             var cartLines = items
                 .Take(MaxCartLines)
-                .Select(i => Trim($"{i.Product.Id} {Trim(i.Product.Name, 18)} x{i.Quantity}  Rs. {i.Total}", columnWidth))
+                .Select(i => Trim($"{i.Product.Id} {Trim(i.Product.Name, 18)} * {i.Quantity}  Rs. {i.Total}", columnWidth))
                 .ToList();
             if (items.Count == 0)
             {
@@ -394,7 +461,7 @@ Enter choice: ");
             {
                 cartLines.Add($"...and {items.Count - MaxCartLines} more item(s)");
             }
-            cartLines.Add(Trim($"Items: {_cart.Count}   Total: Rs. {_cart.Total}/-", columnWidth));
+            cartLines.Add(Trim($"Items: {_cart.Count}  Total: Rs. {_cart.Total}/-", columnWidth));
 
             var panel = new Table()
                 .Border(TableBorder.Rounded)
@@ -436,11 +503,9 @@ Enter choice: ");
                     case ConsoleKey.E:
                         EditOrRemove(false);
                         break;
-
                     case ConsoleKey.R:
                         EditOrRemove(true);
                         break;
-
                     case ConsoleKey.K:
                         if (_cart.IsEmpty)
                         {
@@ -453,10 +518,8 @@ Enter choice: ");
                             return;
                         }
                         break;
-
                     case ConsoleKey.B:
                         return;
-
                     default:
                         Logger.Warn("Invalid option choice.");
                         Notifier.Warning("Please choose E, R, K or B.");
@@ -498,7 +561,7 @@ Enter choice: ");
             Console.WriteLine(Line('='));
             DrawCartNotifications(id);
             Console.Write(@"
-[A] Add   [E] Edit Qty   [R] Remove
+[E] Edit Quantity   [R] Remove
 [K] Checkout   [B] Back
 
 Choice: ");
@@ -508,9 +571,7 @@ Choice: ");
         {
             var textWidth = Math.Max(20, Console.WindowWidth - 8);
 
-            var lines = Notifier.GetNotificationsAfter(id, NoticeLines).Select(n => $"[{Color(n.Level)}]> {Markup.Escape(Trim(n.Message, textWidth))}[/]")
-                .ToList();
-
+            var lines = Notifier.GetNotificationsAfter(id, NoticeLines).Select(n => $"[{Color(n.Level)}]> {Markup.Escape(Trim(n.Message, textWidth))}[/]").ToList();
             if (lines.Count == 0 && _cart.IsEmpty)
             {
                 lines.Add("[yellow]> Your cart is empty. Press A to add a product or B to go back.[/]");
@@ -526,7 +587,6 @@ Choice: ");
     .AddColumn("[bold cyan]NOTIFICATIONS[/]");
 
             panel.AddRow(new Markup(string.Join("\n", lines)));
-
             AnsiConsole.Write(panel);
         }
 
@@ -535,9 +595,14 @@ Choice: ");
             if (_cart.IsEmpty)
             {
                 Logger.Warn("Edit/remove attempted with an empty cart");
-                Notifier.Warning(remove
-                    ? "Your cart is empty. There is nothing to remove."
-                    : "Your cart is empty. There is nothing to edit.");
+                if (remove)
+                {
+                    Notifier.Warning("Your cart is empty. There is nothing to remove.");
+                }
+                else
+                {
+                    Notifier.Warning("Your cart is empty. There is nothing to edit.");
+                }
                 return;
             }
 
@@ -576,7 +641,7 @@ Choice: ");
 
             var prompt = current == 0
                 ? $"Quantity for {product.Name} ({MinAddQty}-{size}): "
-                : $"{product.Name} is already in cart (x{current}). Add how many more? ({MinAddQty}-{size}): ";
+                : $"{product.Name} is already in cart ( x {current}). Add how many more? ({MinAddQty}-{size}): ";
 
             var qty = ReadInt(prompt, MinAddQty, size);
             AddQuantity(product, qty);
@@ -592,7 +657,7 @@ Choice: ");
             }
             else
             {
-                Notifier.Success($"{product.Name} +{qty} added (now x{current + qty})");
+                Notifier.Success($"{product.Name} +{qty} added (now x {current + qty})");
             }
         }
 
@@ -632,7 +697,7 @@ Total    : Rs. {_cart.Total}/-
                 Logger.Info("Checkout cancelled by user");
                 return false;
             }
-
+            Console.Clear();
             Logger.Info($"Payment of Rs. {_cart.Total}/- successful (PAID)");
             Console.WriteLine("\n[SUCCESS] Payment successful!!!");
             var invoice = _invoices.Display(user, _cart.Items.ToList());
@@ -653,11 +718,15 @@ Total    : Rs. {_cart.Total}/-
                 Notifier.Error("Payment done, but the invoice PDF could not be created.");
             }
 
+            string checkedOutUser = user.Username;
             _cart.Clear();
+            CartPersistence.Delete(checkedOutUser);
+
             Console.WriteLine("Press any key to continue...");
             Console.ReadKey(true);
             return true;
         }
+
 
         private Address? ChooseAddress()
         {

@@ -9,12 +9,11 @@ namespace ShoppingApplication
         static void Main(string[] args)
         {
             UserRepository userRepository = new UserRepository();
-            AuthService authService = new AuthService(userRepository);
             CartService cartService = new CartService();
+            AuthService authService = new AuthService(userRepository, cartService);
             ProductRepository productRepository = new ProductRepository();
             InvoiceRepository invoiceRepository = new InvoiceRepository();
             InvoiceService invoiceService = new InvoiceService(invoiceRepository);
-            AuthService userService = new AuthService(userRepository);
             UserView userView = new UserView(authService, cartService, productRepository, invoiceService);
             userView.RunApplicationLoop();
             Console.WriteLine("Thank you for your visit...");
