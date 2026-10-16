@@ -32,9 +32,15 @@
             lock (_lock)
             {
                 File.AppendAllText(_file, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{level}] {msg}{Environment.NewLine}");
-                if (!showInPanel) return;
+                if (!showInPanel)
+                {
+                    return;
+                }
                 _recent.Enqueue($"[{level}] {msg}");
-                while (_recent.Count > 5) _recent.Dequeue();
+                while (_recent.Count > 5)
+                {
+                    _recent.Dequeue();
+                }
             }
         }
     }

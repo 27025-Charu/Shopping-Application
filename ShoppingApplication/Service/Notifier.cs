@@ -32,11 +32,11 @@ namespace ShoppingApplication.service
             }
         }
 
-        public static Notification? LastAfter(int mark)
+        public static List<Notification> GetNotificationsAfter(int mark, int count)
         {
             lock (_lock)
             {
-                return _notices.LastOrDefault(n => n.Id > mark);
+                return _notices.Where(n => n.Id > Id).TakeLast(count).ToList();
             }
         }
 
@@ -53,7 +53,6 @@ namespace ShoppingApplication.service
             lock (_lock)
             {
                 _notices.Add(new Notification(++_lastId, level, message));
-
                 if (_notices.Count > Capacity)
                 {
                     _notices.RemoveAt(0);

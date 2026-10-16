@@ -18,6 +18,9 @@ namespace ShoppingApplication.View
         private const int NoticeLines = 3;
         private const int MaxCartLines = 4;
 
+        private const int MinAddQty = 1, MaxAddQty = 5;
+        private const int MinCols = 70, MinRows = 30;
+
         public UserView(AuthService auth, CartService cart, ProductRepository products, InvoiceService invoices)
         {
             _auth = auth;
@@ -37,7 +40,8 @@ SHOPPING APPLICATION
 ==================================
 1. Sign Up
 2. Login
-3. Exit
+3. Reset Password
+4. Exit
 ----------------------------------
 Enter choice: ");
 
@@ -56,13 +60,16 @@ Enter choice: ");
                         }
                         break;
                     case "3":
+                        ResetPasswordPage();
+                        break;
+                    case "4":
                         Logger.Info("Application exited");
                         Console.WriteLine(" Happy shopping!");
                         return;
                     default:
                         Logger.Warn("Invalid menu choice");
-                        Console.WriteLine(" Invalid choice. Please enter 1, 2 or 3.");
-                        Console.WriteLine(" Press any key to continue...");
+                        Console.WriteLine(" Invalid choice. Please enter 1, 2, 3 or 4.");
+                        Console.WriteLine("Press any key to continue...");
                         Console.ReadKey(true);
                         break;
                 }
@@ -78,29 +85,121 @@ Enter choice: ");
             }
         }
 
+        private static string Line(char c)
+        {
+            return new string(c, Math.Max(10, Math.Min(50, Console.WindowWidth - 1)));
+        }
+
         private bool LoginPage()
         {
             for (var attempt = 1; attempt <= MaxAttempts; attempt++)
             {
                 ClearScreen();
                 Console.WriteLine("============ LOGIN ============");
+                AnsiConsole.MarkupLine("[grey]B = Back to menu   S = If New user then Sign Up   F = Forgot password[/]");
                 Console.Write("Username : ");
                 var username = (Console.ReadLine() ?? "").Trim();
+
+                if (username.Equals("B", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+                if (username.Equals("S", StringComparison.OrdinalIgnoreCase))
+                {
+                    return SignUpPage();
+                }
+                if (username.Equals("F", StringComparison.OrdinalIgnoreCase))
+                {
+                    attempt = ResetPasswordPage() ? 0 : attempt - 1;
+                    continue;
+                }
+
                 Console.Write("Password : ");
                 var password = ReadPassword();
-
                 if (_auth.Login(username, password))
                 {
-                    Console.WriteLine("\n[SUCCESS] Login successful!\n Loading homescreen...");
+                    Console.WriteLine("\n[SUCCESS] Login successful!");
                     Thread.Sleep(1000);
                     return true;
                 }
-                Console.WriteLine($"\n[ERROR] ({attempt}/3). Invalid username or password");
+
+                Console.WriteLine($"\n[ERROR] ({attempt}/{MaxAttempts}). Invalid username or password");
+                if (attempt < MaxAttempts)
+                {
+                    Console.WriteLine("Note: type F as the username if you forgot your password, or S to sign up.");
+                }
                 Console.WriteLine("Press any key to continue...");
                 Console.ReadKey(true);
             }
+
             Logger.Warn("Too many failed login attempts");
+            ClearScreen();
+            Console.WriteLine("[ERROR] Too many failed attempts. Returning to the main menu.");
+            Console.WriteLine("Press any key to continue...");
+            Console.ReadKey(true);
             return false;
+        }
+
+        private bool ResetPasswordPage()
+        {
+            ClearScreen();
+            Console.WriteLine("========== RESET PASSWORD ==========");
+            AnsiConsole.MarkupLine("[grey]Confirm your details first. Type B as the username to cancel.[/]");
+
+            Console.Write("Username             : ");
+            var username = (Console.ReadLine() ?? "").Trim();
+            if (username.Equals("B", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            Console.Write("Registered Phone     : ");
+            var phone = (Console.ReadLine() ?? "").Trim();
+            Console.Write("DOB (DD/MM/YYYY)     : ");
+            var dob = (Console.ReadLine() ?? "").Trim();
+
+            if (!_auth.VerifyIdentity(username, phone, dob))
+            {
+                Console.WriteLine("\n[ERROR] The details do not match our records. Password was not changed.");
+                Console.WriteLine("Press any key to continue...");
+                Console.ReadKey(true);
+                return false;
+            }
+
+            Console.WriteLine("\n[SUCCESS] Details verified.");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Password: 8+ chars, 1 upper, 1 lower, 1 number, 1 special");
+            Console.ResetColor();
+
+            string newPassword;
+            while (true)
+            {
+                Console.Write("New Password         : ");
+                newPassword = ReadPassword();
+                var formatValidation = Validator.Password(newPassword);
+                if (formatValidation != null)
+                {
+                    Console.WriteLine($"[ERROR] {formatValidation}");
+                    continue;
+                }
+                if (_auth.IsCurrentPassword(username, newPassword))
+                {
+                    Console.WriteLine("[ERROR] New password must be different from the old password.");
+                    continue;
+                }
+
+                Console.Write("Confirm New Password : ");
+                if (ReadPassword() == newPassword)
+                {
+                    break;
+                }
+                Console.WriteLine("[ERROR] Passwords do not match. Try again.");
+            }
+
+            _auth.ResetPassword(username, newPassword);
+            Console.WriteLine("\n[SUCCESS] Password reset successful! Please login with your new password.");
+            Console.WriteLine("Press any key to continue...");
+            Console.ReadKey(true);
+            return true;
         }
 
         private bool SignUpPage()
@@ -149,13 +248,27 @@ Enter choice: ");
                 Console.WriteLine("[ERROR] Passwords do not match. Try again.");
             }
 
+            var addresses = new List<Address>();
+            Console.Write("\nAdd a delivery address now? (Y/N, optional): ");
+            while ((Console.ReadLine() ?? "").Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
+            {
+                addresses.Add(ReadAddress());
+                if (addresses.Count >= AuthService.MaxAddresses)
+                {
+                    Console.WriteLine($"You can save up to {AuthService.MaxAddresses} addresses.");
+                    break;
+                }
+                Console.Write("\nAdd another address? (Y/N): ");
+            }
+
             var user = new User
             {
                 FirstName = first,
-                LastName = string.IsNullOrWhiteSpace(last) ? null : last,
+                LastName = last,
                 Dob = DateTime.ParseExact(dobText, "dd/MM/yyyy", CultureInfo.InvariantCulture),
                 Phone = phone,
-                Username = username
+                Username = username,
+                Addresses = addresses
             };
             _auth.Register(user, password);
             Console.WriteLine("\n[SUCCESS] Account created! Redirecting to Dashboard...");
@@ -163,38 +276,39 @@ Enter choice: ");
             return true;
         }
 
+        private static Address ReadAddress()
+        {
+            Console.WriteLine("\n--- Delivery Address ---");
+            var street = ReadValid("Street / House No  : ", Validator.Street);
+            var city = ReadValid("City               : ", Validator.City);
+            var pincode = ReadValid("Pincode            : ", Validator.Pincode);
+            var phone = ReadValid("Phone (this address): ", Validator.Phone);
+            return new Address { Street = street, City = city, Pincode = pincode, Phone = phone };
+        }
+
         private void DashboardPage()
         {
             while (true)
             {
-                ClearScreen();
-                Console.WriteLine($"Welcome, {_auth.CurrentUser!.FirstName}");
-                AnsiConsole.MarkupLine("[bold black on cyan] [[C]] CART [/]\t[bold black on cyan] [[X]] LOGOUT [/]\t[bold black on cyan] [[R]] RESET PASSWORD [/]");
-                Console.WriteLine("==================================================");
-
-                DrawProducts();
-                DrawNotificationsAndCart();
-
-                AnsiConsole.Write(new Rule("[bold yellow]YOUR CHOICE[/]").LeftJustified());
-                Console.Write("Enter Product ID to add / edit quantity/ Remove product (or C = Cart, X = Logout): ");
-                var input = (Console.ReadLine() ?? "").Trim();
+                DrawDashboard();
+                var input = ReadLineWithResize(DashboardPrompt, DrawDashboard).Trim();
 
                 switch (input.ToUpper())
                 {
                     case "":
                         break;
+
                     case "X":
                         _auth.Logout();
                         _cart.Clear();
                         Notifier.Clear();
                         return;
+
                     case "C":
                         Logger.Info("Cart opened");
                         CartPage();
                         break;
-                    case "R":
 
-                        break;
                     default:
                         ProcessProductSelection(input);
                         break;
@@ -202,14 +316,43 @@ Enter choice: ");
             }
         }
 
+        private void DrawDashboard()
+        {
+            ClearScreen();
+            Console.WriteLine($"Welcome, {_auth.CurrentUser!.FirstName}");
+            AnsiConsole.MarkupLine("[bold white on blue] [[C]] CART [/]   [bold white on red] [[X]] LOGOUT [/]");
+            Console.WriteLine(Line('='));
+
+            DrawProducts();
+            DrawNotificationsAndCart();
+
+            AnsiConsole.Write(new Rule("[bold yellow]YOUR CHOICE[/]").LeftJustified());
+            if (Console.WindowWidth < MinCols || Console.WindowHeight < MinRows)
+            {
+                AnsiConsole.MarkupLine("[yellow]Window is small - make it larger to see the whole screen.[/]");
+            }
+        }
+
+        private static string DashboardPrompt()
+        {
+            if (Console.WindowWidth >= MinCols)
+            {
+                return "Enter Product ID to add (or C = Cart, X = Logout): ";
+            }
+            else
+            {
+                return "Product ID (C=Cart, X=Logout): ";
+            }
+        }
+
         private void DrawProducts()
         {
             var table = new Table()
                 .Border(TableBorder.Rounded)
-                .AddColumn("[blue]Category[/]")
-                .AddColumn(new TableColumn("[green]ID[/]").Centered())
+                .AddColumn("[bold]Category[/]")
+                .AddColumn(new TableColumn("[blue]ID[/]").Centered())
                 .AddColumn("[green]Product Name[/]")
-                .AddColumn(new TableColumn("[green]Price[/]").RightAligned());
+                .AddColumn(new TableColumn("[magenta]Price[/]").RightAligned());
 
             foreach (var group in _products.GetAll().GroupBy(p => p.Category))
             {
@@ -217,10 +360,10 @@ Enter choice: ");
                 foreach (var p in group)
                 {
                     table.AddRow(
-                        firstRow ? $"[bold red]{Markup.Escape(group.Key.ToUpper())}[/]" : "",
+                        firstRow ? $"[bold yellow]{Markup.Escape(group.Key.ToUpper())}[/]" : "",
                         Markup.Escape(p.Id.ToString()),
                         Markup.Escape(p.Name),
-                        $"Rs. {p.Price}");
+                        $"Rs. {p.Price}/-");
                     firstRow = false;
                 }
             }
@@ -229,8 +372,9 @@ Enter choice: ");
 
         private void DrawNotificationsAndCart()
         {
+            var columnWidth = Math.Max(20, (Console.WindowWidth - 9) / 2);
             var notices = Notifier.Latest(NoticeLines)
-                .Select(n => $"[{Color(n.Level)}]> {Markup.Escape(Trim(n.Message, 48))}[/]")
+                .Select(n => $"[{Color(n.Level)}] > {Markup.Escape(Trim(n.Message, columnWidth - 2))}[/]")
                 .ToList();
             if (notices.Count == 0)
             {
@@ -240,7 +384,7 @@ Enter choice: ");
             var items = _cart.Items.ToList();
             var cartLines = items
                 .Take(MaxCartLines)
-                .Select(i => $"{i.Product.Id} {Trim(i.Product.Name, 18)} x{i.Quantity}  Rs. {i.Total:N0}")
+                .Select(i => Trim($"{i.Product.Id} {Trim(i.Product.Name, 18)} x{i.Quantity}  Rs. {i.Total}", columnWidth))
                 .ToList();
             if (items.Count == 0)
             {
@@ -250,13 +394,13 @@ Enter choice: ");
             {
                 cartLines.Add($"...and {items.Count - MaxCartLines} more item(s)");
             }
-            cartLines.Add($"Items: {_cart.Count}   Total: Rs. {_cart.Total:N0}/-");
+            cartLines.Add(Trim($"Items: {_cart.Count}   Total: Rs. {_cart.Total}/-", columnWidth));
 
             var panel = new Table()
                 .Border(TableBorder.Rounded)
                 .Expand()
                 .AddColumn("[bold cyan]NOTIFICATIONS[/]")
-                .AddColumn("[bold green]LIVE CART[/]");
+                .AddColumn("[bold cyan]LIVE CART[/]");
 
             panel.AddRow(new Markup(string.Join("\n", notices)), new Text(string.Join("\n", cartLines)));
             AnsiConsole.Write(panel);
@@ -278,60 +422,30 @@ Enter choice: ");
             }
         }
 
-
         private void CartPage()
         {
-            var Id = Notifier.Id;
+            var mark = Notifier.Id;
 
             while (true)
             {
-                ClearScreen();
-                Console.WriteLine("================== YOUR CART ==================");
+                DrawCartPage(mark);
+                var key = ReadKeyWithResize(() => DrawCartPage(mark));
 
-                if (_cart.IsEmpty)
-                {
-                    Console.WriteLine("\n[ Your cart is empty ]\n");
-                }
-                else
-                {
-                    Console.WriteLine($"{"ID"} {"Product"} {"Qty"} {"Total"}");
-                    foreach (var i in _cart.Items)
-                    {
-                        Console.WriteLine($"{i.Product.Id} {i.Product.Name} {i.Quantity} {i.Total:N0}");
-                    }
-                    Console.WriteLine($@"
----------------------------------------------
-Grand Total: Rs {_cart.Total:N0}");
-                }
-
-                Console.WriteLine("==============================================");
-
-                var latest = Notifier.LastAfter(Id);
-                if (latest != null)
-                {
-                    AnsiConsole.MarkupLine($"[{Color(latest.Level)}]> {Markup.Escape(latest.Message)}[/]");
-                }
-
-                Console.Write(@"[E] Edit Qty   [R] Remove   
-[K] Checkout   [B] Back
-
-Choice: ");
-                var key = Console.ReadKey(intercept: true).Key;
                 switch (key)
                 {
                     case ConsoleKey.E:
-                        EditOrRemove(remove: false);
+                        EditOrRemove(false);
                         break;
 
                     case ConsoleKey.R:
-                        EditOrRemove(remove: true);
+                        EditOrRemove(true);
                         break;
 
                     case ConsoleKey.K:
                         if (_cart.IsEmpty)
                         {
                             Logger.Warn("Checkout attempted with an empty cart");
-                            Notifier.Warning("Your cart is empty. Add products first.");
+                            Notifier.Warning("Your cart is empty. Add products before checkout.");
                             break;
                         }
                         if (CheckoutPage())
@@ -351,6 +465,150 @@ Choice: ");
             }
         }
 
+        private void DrawCartPage(int id)
+        {
+            ClearScreen();
+            AnsiConsole.Write(new Rule("[bold yellow]YOUR CART[/]").LeftJustified());
+
+            if (_cart.IsEmpty)
+            {
+                AnsiConsole.MarkupLine("\n[grey][[ Your cart is empty ]][/]\n");
+            }
+            else
+            {
+                var table = new Table()
+                    .Border(TableBorder.Rounded)
+                    .AddColumn("[blue]ID[/]")
+                    .AddColumn("[green]Product[/]")
+                    .AddColumn(new TableColumn("[bold]Qty[/]").RightAligned())
+                    .AddColumn(new TableColumn("[magenta]Total[/]").RightAligned());
+
+                foreach (var i in _cart.Items)
+                {
+                    table.AddRow(
+                        Markup.Escape(i.Product.Id),
+                        Markup.Escape(i.Product.Name),
+                        i.Quantity.ToString(),
+                        $"Rs. {i.Total}");
+                }
+                AnsiConsole.Write(table);
+                AnsiConsole.MarkupLine($"[bold]Grand Total: Rs. {_cart.Total}/-[/]");
+            }
+
+            Console.WriteLine(Line('='));
+            DrawCartNotifications(id);
+            Console.Write(@"
+[A] Add   [E] Edit Qty   [R] Remove
+[K] Checkout   [B] Back
+
+Choice: ");
+        }
+
+        private void DrawCartNotifications(int id)
+        {
+            var textWidth = Math.Max(20, Console.WindowWidth - 8);
+
+            var lines = Notifier.GetNotificationsAfter(id, NoticeLines).Select(n => $"[{Color(n.Level)}]> {Markup.Escape(Trim(n.Message, textWidth))}[/]")
+                .ToList();
+
+            if (lines.Count == 0 && _cart.IsEmpty)
+            {
+                lines.Add("[yellow]> Your cart is empty. Press A to add a product or B to go back.[/]");
+            }
+            if (lines.Count == 0)
+            {
+                lines.Add("[grey]> No new notifications[/]");
+            }
+
+            var panel = new Table()
+    .Border(TableBorder.Rounded)
+    .Expand()
+    .AddColumn("[bold cyan]NOTIFICATIONS[/]");
+
+            panel.AddRow(new Markup(string.Join("\n", lines)));
+
+            AnsiConsole.Write(panel);
+        }
+
+        private void EditOrRemove(bool remove)
+        {
+            if (_cart.IsEmpty)
+            {
+                Logger.Warn("Edit/remove attempted with an empty cart");
+                Notifier.Warning(remove
+                    ? "Your cart is empty. There is nothing to remove."
+                    : "Your cart is empty. There is nothing to edit.");
+                return;
+            }
+
+            Console.Write("\nEnter Product ID: ");
+            var id = (Console.ReadLine() ?? "").Trim();
+            var product = _products.GetById(id);
+            if (product == null || !_cart.Contains(product.Id))
+            {
+                Logger.Warn($"Product Id- '{id}' is not in your cart");
+                Notifier.Warning($"'{id}' is not in your cart.");
+                return;
+            }
+
+            var qty = remove ? 0 : ReadInt("New quantity (0 = remove): ", 0, CartService.MaxQty);
+            ChangeQuantity(product, qty);
+        }
+
+        private void ProcessProductSelection(string productId)
+        {
+            var product = _products.GetById(productId);
+            if (product == null)
+            {
+                Logger.Warn($"Invalid product ID '{productId}'");
+                Notifier.Warning($"Product ID '{productId}' was not found.");
+                return;
+            }
+
+            var current = _cart.GetQty(product.Id);
+            var size = Math.Min(MaxAddQty, CartService.MaxQty - current);
+            if (size < MinAddQty)
+            {
+                Logger.Warn($"Max quantity already in cart for {product.Id}");
+                Notifier.Warning($"{product.Name}: maximum quantity ({CartService.MaxQty}) already in cart. Change it from the cart.");
+                return;
+            }
+
+            var prompt = current == 0
+                ? $"Quantity for {product.Name} ({MinAddQty}-{size}): "
+                : $"{product.Name} is already in cart (x{current}). Add how many more? ({MinAddQty}-{size}): ";
+
+            var qty = ReadInt(prompt, MinAddQty, size);
+            AddQuantity(product, qty);
+        }
+
+        private void AddQuantity(Product product, int qty)
+        {
+            var current = _cart.GetQty(product.Id);
+            _cart.SetQuantity(product, current + qty);
+            if (current == 0)
+            {
+                Notifier.Success($"{product.Name} * {qty} added to cart");
+            }
+            else
+            {
+                Notifier.Success($"{product.Name} +{qty} added (now x{current + qty})");
+            }
+        }
+
+        private void ChangeQuantity(Product product, int qty)
+        {
+            _cart.SetQuantity(product, qty);
+            if (qty == 0)
+            {
+                Notifier.Success($"{product.Name} removed from cart");
+            }
+            else
+            {
+                Notifier.Success($"{product.Name} quantity changed to {qty}");
+            }
+        }
+
         private bool CheckoutPage()
         {
             var user = _auth.CurrentUser!;
@@ -358,20 +616,27 @@ Choice: ");
             Console.WriteLine($@"=========== CHECKOUT ===========
 Customer : {user.FullName} (UserName - {user.Username})
 Items    : {_cart.Count}
-Total    : Rs. {_cart.Total:N0}/-
+Total    : Rs. {_cart.Total}/-
 --------------------------------");
-            Console.Write(" Confirm payment? (Y/N): ");
+
+            var address = ChooseAddress();
+            if (address == null)
+            {
+                Logger.Info("Checkout cancelled - no address chosen");
+                return false;
+            }
+            Console.WriteLine($"\nDeliver to : {address}");
+            Console.Write("Confirm payment? (Y/N): ");
             if (Console.ReadLine()?.Trim().ToUpper() != "Y")
             {
                 Logger.Info("Checkout cancelled by user");
                 return false;
             }
 
-
             Logger.Info($"Payment of Rs. {_cart.Total}/- successful (PAID)");
             Console.WriteLine("\n[SUCCESS] Payment successful!!!");
-
-            var invoice = _invoices.TopLayer(user, _cart.Items.ToList());
+            var invoice = _invoices.Display(user, _cart.Items.ToList());
+            invoice.DeliveryAddress = address;
             PrintInvoice(invoice);
             try
             {
@@ -394,6 +659,63 @@ Total    : Rs. {_cart.Total:N0}/-
             return true;
         }
 
+        private Address? ChooseAddress()
+        {
+            var user = _auth.CurrentUser!;
+            while (true)
+            {
+                Console.WriteLine("\nDELIVERY ADDRESS");
+                for (var i = 0; i < user.Addresses.Count; i++)
+                {
+                    Console.WriteLine($" {i + 1}. {user.Addresses[i]}");
+                }
+                if (user.Addresses.Count == 0)
+                {
+                    Console.Write("No saved address yet. [A] Add address, [B] Back: ");
+                }
+                else
+                {
+                    Console.Write($"Choose 1-{user.Addresses.Count}, [A] Add new address, [B] Back: ");
+                }
+
+                var input = (Console.ReadLine() ?? "").Trim();
+                if (input.Equals("B", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+                if (input.Equals("A", StringComparison.OrdinalIgnoreCase))
+                {
+                    var added = AddNewAddress(user);
+                    if (added != null)
+                    {
+                        return added;
+                    }
+                    continue;
+                }
+
+                if (int.TryParse(input, out var number) && number >= 1 && number <= user.Addresses.Count)
+                {
+                    return user.Addresses[number - 1];
+                }
+
+                Console.WriteLine("[ERROR] Invalid choice.");
+            }
+        }
+
+        private Address? AddNewAddress(User user)
+        {
+            if (user.Addresses.Count >= AuthService.MaxAddresses)
+            {
+                Console.WriteLine($"[ERROR] You can save up to {AuthService.MaxAddresses} addresses. Please choose a saved one.");
+                return null;
+            }
+
+            var address = ReadAddress();
+            _auth.AddAddress(address);
+            Console.WriteLine("[SUCCESS] Address saved to your account.");
+            return address;
+        }
+
         private void PrintInvoice(Invoice invoice)
         {
             Console.WriteLine($@"==================================
@@ -401,81 +723,18 @@ INVOICE {invoice.Number}
 Date: {invoice.Date:dd/MM/yyyy}  Time: {invoice.Date:HH:mm:ss}
 User: {invoice.Customer.Username}
 Name: {invoice.Customer.FullName}
+Deliver to: {invoice.DeliveryAddress}
 ==================================");
             foreach (var i in invoice.Items)
             {
-                Console.WriteLine($"Id: {i.Product.Id} Name: {i.Product.Name} Quantity: {i.Quantity} * Product price:{i.Product.Price:N0} = {i.Total:N0}");
+                Console.WriteLine($"Id: {i.Product.Id} Name: {i.Product.Name} Quantity: {i.Quantity} * Product price:{i.Product.Price} = {i.Total}");
             }
+
             Console.WriteLine($@"
 -----------------------------------
-TOTAL: Rs {invoice.Total:N0} PAID
+TOTAL: Rs {invoice.Total} PAID
 -----------------------------------");
         }
-
-        private void EditOrRemove(bool remove)
-        {
-            if (_cart.IsEmpty)
-            {
-                Logger.Warn("Edit/remove attempted with an empty cart");
-                Notifier.Warning("Your cart is empty.");
-                return;
-            }
-
-            Console.Write(" Enter Product ID: ");
-            var id = (Console.ReadLine() ?? "").Trim();
-            var product = _products.GetById(id);
-            if (product == null || !_cart.Contains(product.Id))
-            {
-                Logger.Warn($"Product Id - '{id}' is not in your cart");
-                Notifier.Warning($"'{id}' is not in your cart.");
-                return;
-            }
-
-            var qty = remove ? 0 : ReadInt("New quantity (0 = remove): ", 0, CartService.MaxQty);
-            ApplyQuantity(product, qty, alreadyInCart: true);
-        }
-
-        private void ProcessProductSelection(string productId)
-        {
-            var product = _products.GetById(productId);
-            if (product == null)
-            {
-                Logger.Warn($"Invalid product ID '{productId}'");
-                Notifier.Warning($"Product ID '{productId}' was not found.");
-                return;
-            }
-
-            if (_cart.Contains(product.Id))
-            {
-                var current = _cart.GetQty(product.Id);
-                var qty = ReadInt($"Already in cart ({current}). New quantity (0 = remove): ", 0, CartService.MaxQty);
-                ApplyQuantity(product, qty, alreadyInCart: true);
-            }
-            else
-            {
-                var qty = ReadInt($"Quantity for {product.Name} (1-{CartService.MaxQty}): ", 1, CartService.MaxQty);
-                ApplyQuantity(product, qty, alreadyInCart: false);
-            }
-        }
-
-        private void ApplyQuantity(Product product, int qty, bool alreadyInCart)
-        {
-            _cart.SetQuantity(product, qty);
-
-            if (qty == 0)
-            {
-                Notifier.Success($"{product.Name} removed from cart");
-            }
-            else if (alreadyInCart)
-            {
-                Notifier.Success($"{product.Name} quantity updated to {qty}");
-            }
-            else
-            {
-                Notifier.Success($"{product.Name} x{qty} added to cart");
-            }
-        }
-
 
         private static string ReadValid(string prompt, Func<string, string?> validate)
         {
@@ -494,7 +753,10 @@ TOTAL: Rs {invoice.Total:N0} PAID
             while (true)
             {
                 Console.Write(prompt);
-                if (int.TryParse(Console.ReadLine(), out var n) && n >= min && n <= max) return n;
+                if (int.TryParse(Console.ReadLine(), out var n) && n >= min && n <= max)
+                {
+                    return n;
+                }
                 Console.WriteLine($"[ERROR] Enter a number between {min} and {max}.");
             }
         }
@@ -524,6 +786,96 @@ TOTAL: Rs {invoice.Total:N0} PAID
                     Console.Write('*');
                 }
             }
+        }
+
+        private static string ReadLineWithResize(Func<string> prompt, Action redraw)
+        {
+            var buffer = new StringBuilder();
+            var (width, height) = (Console.WindowWidth, Console.WindowHeight);
+
+            Console.Write(prompt());
+
+            while (true)
+            {
+                if (HasWindowResized(ref width, ref height))
+                {
+                    redraw();
+                    Console.Write(prompt() + buffer);
+                }
+
+                if (!Console.KeyAvailable)
+                {
+                    Thread.Sleep(50);
+                    continue;
+                }
+
+                var key = Console.ReadKey(intercept: true);
+                switch (key.Key)
+                {
+                    case ConsoleKey.Enter:
+                        Console.WriteLine();
+                        return buffer.ToString();
+
+                    case ConsoleKey.Backspace:
+                        if (buffer.Length > 0)
+                        {
+                            buffer.Length--;
+                            Console.Write("\b \b");
+                        }
+                        break;
+
+                    default:
+                        if (!char.IsControl(key.KeyChar))
+                        {
+                            buffer.Append(key.KeyChar);
+                            Console.Write(key.KeyChar);
+                        }
+                        break;
+                }
+            }
+        }
+
+        private static ConsoleKey ReadKeyWithResize(Action redraw)
+        {
+            var (width, height) = (Console.WindowWidth, Console.WindowHeight);
+
+            while (true)
+            {
+                if (HasWindowResized(ref width, ref height))
+                {
+                    redraw();
+                }
+
+                if (Console.KeyAvailable)
+                {
+                    return Console.ReadKey(intercept: true).Key;
+                }
+
+                Thread.Sleep(50);
+            }
+        }
+
+        private static bool HasWindowResized(ref int lastWidth, ref int lastHeight)
+        {
+            int currentWidth = Console.WindowWidth;
+            int currentHeight = Console.WindowHeight;
+
+            if (currentWidth == lastWidth && currentHeight == lastHeight)
+            {
+                return false;
+            }
+
+            do
+            {
+                lastWidth = currentWidth;
+                lastHeight = currentHeight;
+                Thread.Sleep(150);
+                currentWidth = Console.WindowWidth;
+                currentHeight = Console.WindowHeight;
+            }
+            while (currentWidth != lastWidth || currentHeight != lastHeight);
+
+            return true;
         }
 
         private static string Trim(string input, int maxLength)

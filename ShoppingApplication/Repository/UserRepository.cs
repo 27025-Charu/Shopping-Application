@@ -1,7 +1,7 @@
-﻿using ShoppingApplication.Model;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
+using ShoppingApplication.Model;
 
-namespace ShoppingApplication
+namespace ShoppingApplication.Repository
 {
     internal class UserRepository
     {
@@ -28,7 +28,21 @@ namespace ShoppingApplication
         internal void RegisterUser(User newUser)
         {
             _users.Add(newUser);
-            File.WriteAllText(_path, JsonConvert.SerializeObject(_users, Formatting.Indented));
+            Save();
+        }
+        internal void UpdateUser(User user)
+        {
+            var index = _users.FindIndex(u => u.Username.Equals(user.Username, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0)
+            {
+                _users[index] = user;
+            }
+            Save();
+        }
+
+        private void Save()
+        {
+            File.WriteAllText(_path, JsonConvert.SerializeObject(_users, Newtonsoft.Json.Formatting.Indented));
         }
     }
 }

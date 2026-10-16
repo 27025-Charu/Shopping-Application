@@ -1,6 +1,4 @@
-﻿using ShoppingApplication.Model;
-
-namespace ShoppingApplication.Model
+﻿namespace ShoppingApplication.Model
 {
     public class Invoice
     {
@@ -15,5 +13,7 @@ namespace ShoppingApplication.Model
                 return Items.Sum(i => i.Total);
             }
         }
+
+        public Address? DeliveryAddress { get; set; }
     }
 }

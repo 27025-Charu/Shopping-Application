@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+﻿using System.Text.RegularExpressions;
 
 namespace ShoppingApplication
 {
@@ -93,6 +88,34 @@ namespace ShoppingApplication
                 return "Password must have atleast 1 special character.";
             }
             return null;
+        }
+
+        // ---------- Address ----------
+        public static string? Street(string street)
+        {
+            if (street.Length >= 5 && street.Length <= 60)
+            {
+                return null;
+            }
+            return "Street / house details must be 5 to 60 characters.";
+        }
+
+        public static string? City(string city)
+        {
+            if (Regex.IsMatch(city, @"^[A-Za-z ]{2,30}$"))
+            {
+                return null;
+            }
+            return "City needs letters only (2 to 30 characters).";
+        }
+
+        public static string? Pincode(string pincode)
+        {
+            if (Regex.IsMatch(pincode, @"^[1-9]\d{5}$"))
+            {
+                return null;
+            }
+            return "Enter a valid 6-digit pincode.";
         }
     }
 }
