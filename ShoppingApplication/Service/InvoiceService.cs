@@ -25,9 +25,7 @@ namespace ShoppingApplication.Service
         public string CreatePdf(Invoice inv)
         {
             QuestPDF.Settings.License = LicenseType.Community;
-
             var path = _repo.PathFor(inv.Number);
-
             Document.Create(doc => doc.Page(page =>
             {
                 page.Size(PageSizes.A4);

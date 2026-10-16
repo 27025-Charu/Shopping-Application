@@ -90,7 +90,6 @@ namespace ShoppingApplication
             return null;
         }
 
-        // ---------- Address ----------
         public static string? Street(string street)
         {
             if (street.Length >= 5 && street.Length <= 60)

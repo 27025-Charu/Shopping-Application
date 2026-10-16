@@ -27,8 +27,10 @@ namespace ShoppingApplication.Service
 
         public static List<CartItem> Load(string username)
         {
-            if (string.IsNullOrWhiteSpace(username)) return new List<CartItem>();
-
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return new List<CartItem>();
+            }
             try
             {
                 string path = GetPath(username);

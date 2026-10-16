@@ -10,9 +10,7 @@ namespace ShoppingApplication.Repository
         public UserRepository()
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            _users = File.Exists(_path)
-                ? JsonConvert.DeserializeObject<List<User>>(File.ReadAllText(_path)) ?? new()
-                : new();
+            _users = File.Exists(_path) ? JsonConvert.DeserializeObject<List<User>>(File.ReadAllText(_path)) ?? new() : new();
         }
 
         public bool Exists(string username)
