@@ -118,7 +118,7 @@ Enter choice: ");
                 var password = ReadPassword();
                 if (_auth.Login(username, password))
                 {
-                    Console.WriteLine("\n[SUCCESS] Login successful!");
+                    Console.WriteLine("\n[SUCCESS] Login successful!\nRedirecting to Home screen catalog page...");
                     _cart.LoadSession(username);
                     Thread.Sleep(1000);
                     return true;
@@ -215,7 +215,7 @@ Enter choice: ");
             {
                 return false;
             }
-            if (!ReadValidWithLimit("DOB (DD/MM/YYYY): ", Validator.Dob, out string dobText))
+            if (!ReadValidWithLimit("DOB (DD/MM/YYYY): ", input => Validator.Dob((input ?? "").Replace("-", "/").Replace(".", "/")), out string rawDobText))
             {
                 return false;
             }
@@ -223,13 +223,24 @@ Enter choice: ");
             {
                 return false;
             }
-            bool usernameValid = ReadValidWithLimit("Username         : ", AvailableUsername, out string username);
+            bool usernameValid = ReadValidWithLimit("Username         : ", input =>
+            {
+                string? formatError = Validator.Username(input);
+                if (formatError != null)
+                {
+                    return formatError;
+                }
+
+                string? availabilityError = AvailableUsername(input);
+                if (availabilityError != null) return availabilityError;
+
+                return null;
+            }, out string username);
 
             if (!usernameValid)
             {
                 return false;
             }
-
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Password: 8+ chars, 1 upper, 1 lower, 1 number, 1 special");
             Console.ResetColor();
@@ -279,6 +290,7 @@ Enter choice: ");
                 }
                 Console.Write("\nAdd another address? (Y/N): ");
             }
+            string dobText = rawDobText.Replace("-", "/").Replace(".", "/");
 
             var user = new User
             {
@@ -638,11 +650,23 @@ Choice: ");
                 Notifier.Warning($"{product.Name}: maximum quantity ({CartService.MaxQty}) already in cart. Change it from the cart.");
                 return;
             }
+            string prompt;
 
-            var prompt = current == 0
-                ? $"Quantity for {product.Name} ({MinAddQty}-{size}): "
-                : $"{product.Name} is already in cart ( x {current}). Add how many more? ({MinAddQty}-{size}): ";
-
+            if (current == 0)
+            {
+                prompt = $"Quantity for {product.Name} ({MinAddQty}-{size}): ";
+            }
+            else
+            {
+                if (size == MinAddQty)
+                {
+                    prompt = $"{product.Name} is already in cart ( x {current}). Add how many more? (can add only {size}): ";
+                }
+                else
+                {
+                    prompt = $"{product.Name} is already in cart ( x {current}). Add how many more? (Can be between {MinAddQty} and {size}): ";
+                }
+            }
             var qty = ReadInt(prompt, MinAddQty, size);
             AddQuantity(product, qty);
         }

@@ -57,12 +57,12 @@ namespace ShoppingApplication
         }
         public static string? Username(string username)
         {
-            if (Regex.IsMatch(username, @"^[A-Za-z0-9_]{4,15}$"))
+            if (Regex.IsMatch(username, @"^(?=.*[A-Za-z])[A-Za-z0-9_]{4,15}$"))
             {
                 return null;
             }
 
-            return "Username must be between 4 and 15 characters, containing only letters, digits, or underscores.";
+            return "Username must be 4-15 characters, containing letters, digits, or underscores (cannot be numbers alone).";
         }
 
         public static string? Password(string password)
