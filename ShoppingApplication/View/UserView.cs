@@ -466,7 +466,7 @@ Enter choice: ");
             var items = _cart.Items.ToList();
             var cartLines = items
                 .Take(MaxCartLines)
-                .Select(i => Trim($"{i.Product.Id} {Trim(i.Product.Name, 18)} * {i.Quantity}  Rs. {i.Total}", columnWidth))
+                .Select(i => Trim($"[{i.Product.Id}] {Trim(i.Product.Name, 18)} * {i.Quantity} Price:  Rs. {i.Total:N2}", columnWidth))
                 .ToList();
             if (items.Count == 0)
             {
@@ -476,7 +476,7 @@ Enter choice: ");
             {
                 cartLines.Add($"...and {items.Count - MaxCartLines} more item(s)");
             }
-            cartLines.Add(Trim($"Items: {_cart.Count}  Total: Rs. {_cart.Total}/-", columnWidth));
+            cartLines.Add(Trim($"Items: {_cart.Count}  Total: Rs. {_cart.Total:N2}/-", columnWidth));
 
             var panel = new Table()
                 .Border(TableBorder.Rounded)
