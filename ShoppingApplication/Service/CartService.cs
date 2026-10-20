@@ -11,6 +11,8 @@ namespace ShoppingApplication.Service
         public int Count => _items.Values.Sum(i => i.Quantity);
         public decimal Total => _items.Values.Sum(i => i.Total);
         public bool IsEmpty => _items.Count == 0;
+        public decimal PriceTotal => _items.Values.Sum(i => i.Product.Price * i.Quantity);
+        public decimal TaxTotal => _items.Values.Sum(i => i.Product.Tax * i.Quantity);
 
         public bool Contains(string id)
         {

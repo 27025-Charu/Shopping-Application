@@ -36,7 +36,7 @@ namespace ShoppingApplication.service
         {
             lock (_lock)
             {
-                return _notices.Where(n => n.Id > Id).TakeLast(count).ToList();
+                return _notices.Where(n => n.Id > mark).Take(count).ToList();
             }
         }
 

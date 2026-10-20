@@ -8,7 +8,10 @@ namespace ShoppingApplication.Service
     {
         public static void Delete(string username)
         {
-            if (string.IsNullOrWhiteSpace(username)) return;
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return;
+            }
 
             try
             {

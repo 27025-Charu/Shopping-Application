@@ -380,10 +380,13 @@ Enter choice: ");
                     case "":
                         break;
                     case "X":
-                        _auth.Logout();
-                        _cart.Clear();
-                        Notifier.Clear();
-                        return;
+                        if (_auth.Logout())
+                        {
+                            _cart.Clear();
+                            Notifier.Clear();
+                            return;
+                        }
+                        break;
                     case "C":
                         Logger.Info("Cart opened");
                         CartPage();
@@ -556,18 +559,23 @@ Enter choice: ");
                     .AddColumn("[blue]ID[/]")
                     .AddColumn("[green]Product[/]")
                     .AddColumn(new TableColumn("[bold]Qty[/]").RightAligned())
+                    .AddColumn(new TableColumn("[yellow]Tax[/]").RightAligned())
                     .AddColumn(new TableColumn("[magenta]Total[/]").RightAligned());
 
                 foreach (var i in _cart.Items)
                 {
+                    decimal productTaxTotal = i.Product.Tax * i.Quantity;
                     table.AddRow(
                         Markup.Escape(i.Product.Id),
                         Markup.Escape(i.Product.Name),
                         i.Quantity.ToString(),
-                        $"Rs. {i.Total}");
+                        $"Rs. {productTaxTotal:N2}",
+                        $"Rs. {i.Total:N2}");
                 }
                 AnsiConsole.Write(table);
-                AnsiConsole.MarkupLine($"[bold]Grand Total: Rs. {_cart.Total}/-[/]");
+                AnsiConsole.MarkupLine($"\n[cyan]Price * Quantity:   Rs. {_cart.PriceTotal:N2}/- [/]");
+                AnsiConsole.MarkupLine($"[cyan]Total Tax       :   Rs. {_cart.TaxTotal:N2}/- [/]");
+                AnsiConsole.MarkupLine($"[yellow]Total           :   Rs. {_cart.Total:N2}/-[/]");
             }
 
             Console.WriteLine(Line('='));
@@ -628,8 +636,26 @@ Choice: ");
                 return;
             }
 
-            var qty = remove ? 0 : ReadInt("New quantity (0 = remove): ", 0, CartService.MaxQty);
-            ChangeQuantity(product, qty);
+            int quantity;
+            if (remove)
+            {
+                quantity = 0;
+            }
+            else
+            {
+                quantity = ReadInt($"New quantity for {product.Name} (0 = remove): ", 0, CartService.MaxQty);
+            }
+            if (quantity == 0)
+            {
+                bool confirmRemoval = AnsiConsole.Confirm($"Are you sure you want to remove {Markup.Escape(product.Name)}[/] from your cart?");
+                if (!confirmRemoval)
+                {
+                    Logger.Info($"Removal of {product.Name} canceled by user.");
+                    Notifier.Success("Action canceled. Item remains in your cart.");
+                    return;
+                }
+            }
+            ChangeQuantity(product, quantity);
         }
 
         private void ProcessProductSelection(string productId)

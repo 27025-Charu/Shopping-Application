@@ -1,6 +1,7 @@
 ﻿using ShoppingApplication.Model;
 using ShoppingApplication.Repository;
 using ShoppingApplication.Service;
+using Spectre.Console;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -39,16 +40,25 @@ namespace ShoppingApplication
             return true;
         }
 
-        public void Logout()
+        public bool Logout()
         {
             if (CurrentUser != null)
             {
+                var confirmMessage = $"Are you sure you want to log out, {Markup.Escape(CurrentUser.Username)}[/]?";
+                if (!AnsiConsole.Confirm(confirmMessage))
+                {
+                    Logger.Info($"Logout canceled by user: {CurrentUser.Username}");
+                    return false;
+                }
+
                 _cart.SaveSession(CurrentUser.Username);
                 _cart.Clear();
                 Logger.Info($"User - {CurrentUser.Username} logged out.");
             }
             CurrentUser = null;
+            return true;
         }
+
 
         internal void Register(User newUser, string password)
         {
@@ -57,13 +67,14 @@ namespace ShoppingApplication
             CurrentUser = newUser;
             Logger.Info($"New user - {newUser.Username} registered.");
         }
+
         internal bool VerifyIdentity(string username, string phone, string dobText)
         {
             var user = _repo.GetUser(username);
-            var dobOk = DateTime.TryParseExact(dobText, "dd/MM/yyyy", CultureInfo.InvariantCulture,
+            var dobFlag = DateTime.TryParseExact(dobText, "dd/MM/yyyy", CultureInfo.InvariantCulture,
                 DateTimeStyles.None, out var dob);
 
-            if (user == null || !dobOk || user.Phone != phone || user.Dob.Date != dob.Date)
+            if (user == null || !dobFlag || user.Phone != phone || user.Dob.Date != dob.Date)
             {
                 Logger.Warn($"Password reset verification failed - '{username}'");
                 return false;

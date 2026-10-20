@@ -17,7 +17,7 @@ namespace ShoppingApplication.Service
 
         public Invoice Display(User user, IEnumerable<CartItem> items) => new()
         {
-            Number = $"INV-{DateTime.Now:yyyyMMdd-HHmmss}",
+            Number = $"INV-{DateTime.Now:yyyyMMdd-HHmmss}-{user.Username}",
             Date = DateTime.Now,
             Customer = user,
             Items = items.ToList(),
