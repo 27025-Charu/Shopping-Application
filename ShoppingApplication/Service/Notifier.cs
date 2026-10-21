@@ -1,6 +1,6 @@
 ﻿using ShoppingApplication.Model;
 
-namespace ShoppingApplication.service
+namespace ShoppingApplication.Service
 {
     internal static class Notifier
     {

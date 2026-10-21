@@ -2,18 +2,15 @@
 {
     public class Invoice
     {
-        public string Number { get; set; } = "";
+        public string Number { get; set; } = string.Empty;
         public DateTime Date { get; set; }
         public User Customer { get; set; } = new();
         public List<CartItem> Items { get; set; } = new();
-        public decimal Total
-        {
-            get
-            {
-                return Items.Sum(i => i.Total);
-            }
-        }
+        public Address DeliveryAddress { get; set; }
+        public string AppliedCouponCode { get; set; } = string.Empty;
+        public decimal DiscountAmount { get; set; }
 
-        public Address? DeliveryAddress { get; set; }
+        public decimal Total => Items.Sum(i => i.Total);
+        public decimal GrandTotal => Total - DiscountAmount;
     }
 }

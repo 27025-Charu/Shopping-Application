@@ -44,7 +44,7 @@ namespace ShoppingApplication
         {
             if (CurrentUser != null)
             {
-                var confirmMessage = $"Are you sure you want to log out, {Markup.Escape(CurrentUser.Username)}[/]?";
+                var confirmMessage = $"Are you sure you want to log out, [yellow]{Markup.Escape(CurrentUser.Username)}[/]?";
                 if (!AnsiConsole.Confirm(confirmMessage))
                 {
                     Logger.Info($"Logout canceled by user: {CurrentUser.Username}");

@@ -15,13 +15,16 @@ namespace ShoppingApplication.Service
             _repo = repo;
         }
 
-        public Invoice Display(User user, IEnumerable<CartItem> items) => new()
+        public Invoice Display(User user, CartService cart) => new()
         {
             Number = $"INV-{DateTime.Now:yyyyMMdd-HHmmss}-{user.Username}",
             Date = DateTime.Now,
             Customer = user,
-            Items = items.ToList(),
+            Items = cart.Items.ToList(),
+            AppliedCouponCode = cart.AppliedCoupon?.Code ?? string.Empty,
+            DiscountAmount = cart.DiscountTotal
         };
+
         public string CreatePdf(Invoice inv)
         {
             QuestPDF.Settings.License = LicenseType.Community;
@@ -78,8 +81,27 @@ namespace ShoppingApplication.Service
                         }
                     });
 
-                    col.Item().PaddingTop(10).AlignRight().Text($"Grand Total: Rs {inv.Total:N2}").Bold().FontSize(13);
-                    col.Item().AlignRight().Text("Payment Status: PAID").Bold();
+                    col.Item().PaddingTop(15).AlignRight().Column(totalCol =>
+                    {
+                        totalCol.Spacing(2);
+                        totalCol.Item().Text($"Subtotal: Rs {inv.Total:N2}").FontSize(11);
+                        if (!string.IsNullOrWhiteSpace(inv.AppliedCouponCode))
+                        {
+                            totalCol.Item().Text(t =>
+                            {
+                                t.Span($"Discount ({inv.AppliedCouponCode}): -Rs {inv.DiscountAmount:N2}")
+                                 .Style(TextStyle.Default.FontSize(11));
+                            });
+                        }
+
+                        totalCol.Item().Text($"Grand Total: Rs {inv.GrandTotal:N2}").Bold().FontSize(13);
+
+                        totalCol.Item().Text(t =>
+                        {
+                            t.Span("Payment Status: PAID")
+                             .Style(TextStyle.Default.Bold());
+                        });
+                    });
                 });
 
                 page.Footer().AlignCenter().Text("Thank you for shopping with us!");

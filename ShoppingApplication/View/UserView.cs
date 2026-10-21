@@ -1,6 +1,5 @@
 ﻿using ShoppingApplication.Model;
 using ShoppingApplication.Repository;
-using ShoppingApplication.service;
 using ShoppingApplication.Service;
 using Spectre.Console;
 using System.Globalization;
@@ -476,7 +475,8 @@ Enter choice: ");
             {
                 cartLines.Add($"...and {items.Count - MaxCartLines} more item(s)");
             }
-            cartLines.Add(Trim($"Items: {_cart.Count}  Total: Rs. {_cart.Total:N2}/-", columnWidth));
+            cartLines.Add(Trim($"Items: {_cart.Count}  Total: Rs. {_cart.GrandTotal:N2}/-", columnWidth));
+
 
             var panel = new Table()
                 .Border(TableBorder.Rounded)
@@ -506,13 +506,12 @@ Enter choice: ");
 
         private void CartPage()
         {
-            var mark = Notifier.Id;
-
+            var currentMark = Notifier.Id;
             while (true)
             {
-                DrawCartPage(mark);
-                var key = ReadKeyWithResize(() => DrawCartPage(mark));
+                DrawCartPage(currentMark);
 
+                var key = ReadKeyWithResize(() => DrawCartPage(currentMark));
                 switch (key)
                 {
                     case ConsoleKey.E:
@@ -520,6 +519,11 @@ Enter choice: ");
                         break;
                     case ConsoleKey.R:
                         EditOrRemove(true);
+                        break;
+                    case ConsoleKey.C:
+                        int preMark = Notifier.Id;
+                        ApplyCouponWorkflow();
+                        currentMark = preMark;
                         break;
                     case ConsoleKey.K:
                         if (_cart.IsEmpty)
@@ -537,11 +541,67 @@ Enter choice: ");
                         return;
                     default:
                         Logger.Warn("Invalid option choice.");
-                        Notifier.Warning("Please choose E, R, K or B.");
+                        Notifier.Warning("Please choose E, R, C, K or B.");
                         break;
                 }
             }
         }
+
+
+        private void ApplyCouponWorkflow()
+        {
+            if (_cart.IsEmpty)
+            {
+                Notifier.Warning("Your cart is empty. Cannot apply coupon codes.");
+                return;
+            }
+
+            Console.Write("\nEnter Coupon Code (or type 'NO' to clear): ");
+            var code = (Console.ReadLine() ?? "").Trim();
+
+            if (code.Equals("NO", StringComparison.OrdinalIgnoreCase))
+            {
+                if (_cart.AppliedCoupon != null)
+                {
+                    string oldCode = _cart.AppliedCoupon.Code;
+                    _cart.RemoveCoupon();
+                    Logger.Info($"Coupon code '{oldCode}' removed from cart.");
+                    Notifier.Success($"Coupon '{oldCode}' successfully removed.");
+                }
+                else
+                {
+                    Notifier.Warning("No coupon was active to remove.");
+                }
+                return;
+            }
+
+            var coupon = _products.GetCouponByCode(code);
+            if (coupon != null && coupon.IsActive)
+            {
+                if (_cart.AppliedCoupon != null)
+                {
+                    string oldCode = _cart.AppliedCoupon.Code;
+                    if (oldCode.Equals(coupon.Code, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Notifier.Warning($"Coupon '{coupon.Code}' is already applied.");
+                        return;
+                    }
+
+                    Logger.Info($"Replacing existing coupon '{oldCode}' with new coupon '{coupon.Code}'.");
+                    Notifier.Success($"Removed old coupon '{oldCode}'.");
+                }
+
+                _cart.ApplyCoupon(coupon);
+                Logger.Info($"Coupon '{coupon.Code}' applied successfully.");
+                Notifier.Success($"Coupon '{coupon.Code}' applied! Saved Rs. {_cart.DiscountTotal:N2}.");
+            }
+            else
+            {
+                Logger.Warn($"Invalid or expired coupon attempt: '{code}'");
+                Notifier.Error("Invalid or expired coupon code. Please try again.");
+            }
+        }
+
 
         private void DrawCartPage(int id)
         {
@@ -575,13 +635,18 @@ Enter choice: ");
                 AnsiConsole.Write(table);
                 AnsiConsole.MarkupLine($"\n[cyan]Price * Quantity:   Rs. {_cart.PriceTotal:N2}/- [/]");
                 AnsiConsole.MarkupLine($"[cyan]Total Tax       :   Rs. {_cart.TaxTotal:N2}/- [/]");
-                AnsiConsole.MarkupLine($"[yellow]Total           :   Rs. {_cart.Total:N2}/-[/]");
+                AnsiConsole.MarkupLine($"[yellow]SubTotal        :   Rs. {_cart.Total:N2}/-[/]");
+                if (_cart.AppliedCoupon != null)
+                {
+                    AnsiConsole.MarkupLine($"Discount ({_cart.AppliedCoupon.Code}): -Rs. {_cart.DiscountTotal:N2}/-");
+                }
+                AnsiConsole.MarkupLine($"[yellow]Grand Total     :   Rs. {_cart.GrandTotal:N2}[/]/-");
             }
 
             Console.WriteLine(Line('='));
             DrawCartNotifications(id);
             Console.Write(@"
-[E] Edit Quantity   [R] Remove
+[E] Edit Quantity   [R] Remove [C] Apply Coupon
 [K] Checkout   [B] Back
 
 Choice: ");
@@ -731,10 +796,14 @@ Choice: ");
             Console.WriteLine($@"=========== CHECKOUT ===========
 Customer : {user.FullName} (UserName - {user.Username})
 Items    : {_cart.Count}
-Total    : Rs. {_cart.Total}/-
---------------------------------");
+Total    : Rs. {_cart.GrandTotal:N2}/-");
+            if (_cart.AppliedCoupon != null)
+            {
+                Console.WriteLine($"Coupon   : {_cart.AppliedCoupon.Code} (Rs. {_cart.DiscountTotal:N2}/-)");
+            }
+            Console.WriteLine("--------------------------------");
 
-            var address = ChooseAddress();
+            Address address = ChooseAddress();
             if (address == null)
             {
                 Logger.Info("Checkout cancelled - no address chosen");
@@ -747,11 +816,14 @@ Total    : Rs. {_cart.Total}/-
                 Logger.Info("Checkout cancelled by user");
                 return false;
             }
+
             Console.Clear();
-            Logger.Info($"Payment of Rs. {_cart.Total}/- successful (PAID)");
+            Logger.Info($"Payment of Rs. {_cart.GrandTotal:N2}/- successful (PAID)");
             Console.WriteLine("\n[SUCCESS] Payment successful!!!");
-            var invoice = _invoices.Display(user, _cart.Items.ToList());
+
+            var invoice = _invoices.Display(user, _cart);
             invoice.DeliveryAddress = address;
+
             PrintInvoice(invoice);
             try
             {
@@ -835,24 +907,32 @@ Total    : Rs. {_cart.Total}/-
             return address;
         }
 
-        private void PrintInvoice(Invoice invoice)
+        private void PrintInvoice(Invoice inv)
         {
-            Console.WriteLine($@"==================================
-INVOICE {invoice.Number}
-Date: {invoice.Date:dd/MM/yyyy}  Time: {invoice.Date:HH:mm:ss}
-User: {invoice.Customer.Username}
-Name: {invoice.Customer.FullName}
-Deliver to: {invoice.DeliveryAddress}
-==================================");
-            foreach (var i in invoice.Items)
+            Console.WriteLine("==================================");
+            Console.WriteLine($"INVOICE {inv.Number}");
+            Console.WriteLine($"Date: {inv.Date:dd-MM-yyyy}  Time: {inv.Date:HH:mm:ss}");
+            Console.WriteLine($"User: {inv.Customer.Username}");
+            Console.WriteLine($"Name: {inv.Customer.FirstName}");
+            Console.WriteLine($"Deliver to: {inv.DeliveryAddress}");
+            Console.WriteLine("==================================");
+
+            foreach (var i in inv.Items)
             {
-                Console.WriteLine($"Id: {i.Product.Id} Name: {i.Product.Name} Quantity: {i.Quantity} * Product price:{i.Product.Price} = {i.Total}");
+                Console.WriteLine($"Id: {i.Product.Id} Name: {i.Product.Name} Quantity: {i.Quantity} * Product price: Rs. {i.Product.Price:N2} = Rs. {i.Total:N2}");
             }
 
-            Console.WriteLine($@"
------------------------------------
-TOTAL: Rs {invoice.Total} PAID
------------------------------------");
+            Console.WriteLine("-----------------------------------");
+            Console.WriteLine($"Subtotal   : Rs. {inv.Total:N2}");
+            if (!string.IsNullOrWhiteSpace(inv.AppliedCouponCode))
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"Discount   : -Rs. {inv.DiscountAmount:N2} ({inv.AppliedCouponCode})");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine($"TOTAL PAID : Rs. {inv.GrandTotal:N2}");
+            Console.WriteLine("-----------------------------------");
         }
 
         private static string ReadValid(string prompt, Func<string, string?> validate)
