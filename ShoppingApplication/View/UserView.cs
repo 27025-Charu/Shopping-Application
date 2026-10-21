@@ -30,12 +30,14 @@ namespace ShoppingApplication.View
 
         public void RunApplicationLoop()
         {
+            int invalidCount = 0;
+
             while (true)
             {
                 ClearScreen();
                 Console.Write(@"Welcome to the Shopping App!
 ==================================
-SHOPPING APPLICATION
+      SHOPPING APPLICATION        
 ==================================
 1. Sign Up
 2. Login
@@ -47,18 +49,15 @@ Enter choice: ");
                 switch ((Console.ReadLine() ?? "").Trim())
                 {
                     case "1":
-                        if (SignUpPage())
-                        {
-                            DashboardPage();
-                        }
+                        invalidCount = 0;
+                        if (SignUpPage()) { DashboardPage(); }
                         break;
                     case "2":
-                        if (LoginPage())
-                        {
-                            DashboardPage();
-                        }
+                        invalidCount = 0;
+                        if (LoginPage()) { DashboardPage(); }
                         break;
                     case "3":
+                        invalidCount = 0;
                         ResetPasswordPage();
                         break;
                     case "4":
@@ -66,7 +65,15 @@ Enter choice: ");
                         Console.WriteLine(" Happy shopping!");
                         return;
                     default:
-                        Logger.Warn("Invalid menu choice");
+                        invalidCount++;
+                        Logger.Warn($"Invalid menu choice. Attempt {invalidCount}/3");
+
+                        if (invalidCount >= 4)
+                        {
+                            Logger.Warn("Exceeded retry limit. Core failure hard exit.");
+                            Environment.Exit(1);
+                        }
+
                         Console.WriteLine(" Invalid choice. Please enter 1, 2, 3 or 4.");
                         Console.WriteLine("Press any key to continue...");
                         Console.ReadKey(true);
