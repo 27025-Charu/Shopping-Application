@@ -53,9 +53,15 @@ namespace ShoppingApplication.Service
 
         private static string GetPath(string username)
         {
+            string baseDir = Path.Combine(AppContext.BaseDirectory, "Data");
+            if (!Directory.Exists(baseDir))
+            {
+                Directory.CreateDirectory(baseDir);
+            }
+
             if (string.IsNullOrWhiteSpace(username))
             {
-                return "guest.json";
+                return Path.Combine(baseDir, "guest.json");
             }
 
             string perfectUsername = username.Trim();
@@ -64,7 +70,7 @@ namespace ShoppingApplication.Service
                 perfectUsername = perfectUsername.Replace(c, '_');
             }
 
-            return $"cart_{perfectUsername.ToLower()}.json";
+            return Path.Combine(baseDir, $"cart_{perfectUsername.ToLower()}.json");
         }
 
         public static void Save(string username, IEnumerable<CartItem> items)

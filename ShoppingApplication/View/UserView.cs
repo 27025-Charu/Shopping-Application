@@ -107,9 +107,10 @@ Enter choice: ");
                 {
                     return SignUpPage();
                 }
+
                 if (username.Equals("F", StringComparison.OrdinalIgnoreCase))
                 {
-                    attempt = ResetPasswordPage() ? 0 : attempt - 1;
+                    ResetPasswordPage();
                     continue;
                 }
 
@@ -139,6 +140,7 @@ Enter choice: ");
             Console.ReadKey(true);
             return false;
         }
+
 
         private bool ResetPasswordPage()
         {
@@ -170,37 +172,48 @@ Enter choice: ");
             Console.WriteLine("Password: 8+ chars, 1 upper, 1 lower, 1 number, 1 special");
             Console.ResetColor();
 
-            string newPassword;
             while (true)
             {
                 Console.Write("New Password         : ");
-                newPassword = ReadPassword();
+                string newPassword = ReadPassword();
+
                 var formatValidation = Validator.Password(newPassword);
                 if (formatValidation != null)
                 {
+                    Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"[ERROR] {formatValidation}");
+                    Console.ResetColor();
                     continue;
                 }
+
                 if (_auth.IsCurrentPassword(username, newPassword))
                 {
+                    Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine("[ERROR] New password must be different from the old password.");
+                    Console.ResetColor();
                     continue;
                 }
 
                 Console.Write("Confirm New Password : ");
-                if (ReadPassword() == newPassword)
+                string confirmPassword = ReadPassword();
+
+                if (confirmPassword == newPassword)
                 {
+                    _auth.ResetPassword(username, newPassword);
                     break;
                 }
-                Console.WriteLine("[ERROR] Passwords do not match. Try again.");
+
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[ERROR] Passwords do not match. Restarting password creation process.");
+                Console.ResetColor();
             }
 
-            _auth.ResetPassword(username, newPassword);
             Console.WriteLine("\n[SUCCESS] Password reset successful! Please login with your new password.");
             Console.WriteLine("Press any key to continue...");
             Console.ReadKey(true);
             return true;
         }
+
 
         private bool SignUpPage()
         {
@@ -379,11 +392,14 @@ Enter choice: ");
                     case "":
                         break;
                     case "X":
-                        if (_auth.Logout())
+                        var confirmMessage = $"Are you sure you want to log out, [yellow]{Markup.Escape(_auth.CurrentUser?.Username ?? "User")}[/]?";
+                        if (AnsiConsole.Confirm(confirmMessage))
                         {
-                            _cart.Clear();
-                            Notifier.Clear();
-                            return;
+                            if (_auth.Logout())
+                            {
+                                Notifier.Clear();
+                                return;
+                            }
                         }
                         break;
                     case "C":
@@ -444,12 +460,13 @@ Enter choice: ");
                         firstRow ? $"[bold yellow]{Markup.Escape(group.Key.ToUpper())}[/]" : "",
                         Markup.Escape(p.Id.ToString()),
                         Markup.Escape(p.Name),
-                        $"Rs. {p.Price}/-");
+                        Markup.Escape($"Rs. {p.Price}/-"));
                     firstRow = false;
                 }
             }
             AnsiConsole.Write(table);
         }
+
 
         private void DrawNotificationsAndCart()
         {
@@ -510,22 +527,39 @@ Enter choice: ");
             while (true)
             {
                 DrawCartPage(currentMark);
+                var (width, height) = (Console.WindowWidth, Console.WindowHeight);
+                ConsoleKeyInfo keyInfo;
 
-                var key = ReadKeyWithResize(() => DrawCartPage(currentMark));
-                switch (key)
+                while (true)
                 {
-                    case ConsoleKey.E:
+                    if (HasWindowResized(ref width, ref height))
+                    {
+                        DrawCartPage(currentMark);
+                    }
+                    if (Console.KeyAvailable)
+                    {
+                        keyInfo = Console.ReadKey(intercept: true);
+                        break;
+                    }
+                    Thread.Sleep(50);
+                }
+
+                char choice = char.ToUpperInvariant(keyInfo.KeyChar);
+
+                switch (choice)
+                {
+                    case 'E':
                         EditOrRemove(false);
                         break;
-                    case ConsoleKey.R:
+                    case 'R':
                         EditOrRemove(true);
                         break;
-                    case ConsoleKey.C:
+                    case 'C':
                         int preMark = Notifier.Id;
                         ApplyCouponWorkflow();
                         currentMark = preMark;
                         break;
-                    case ConsoleKey.K:
+                    case 'K':
                         if (_cart.IsEmpty)
                         {
                             Logger.Warn("Checkout attempted with an empty cart");
@@ -537,7 +571,7 @@ Enter choice: ");
                             return;
                         }
                         break;
-                    case ConsoleKey.B:
+                    case 'B':
                         return;
                     default:
                         Logger.Warn("Invalid option choice.");
@@ -546,6 +580,7 @@ Enter choice: ");
                 }
             }
         }
+
 
 
         private void ApplyCouponWorkflow()
@@ -825,29 +860,33 @@ Total    : Rs. {_cart.GrandTotal:N2}/-");
             invoice.DeliveryAddress = address;
 
             PrintInvoice(invoice);
+
             try
             {
                 var path = _invoices.CreatePdf(invoice);
                 Logger.Info($"Invoice PDF saved: {path}");
                 Console.WriteLine($"\n[SUCCESS] Invoice saved to: {path}");
                 Notifier.Success($"Payment successful. Invoice {invoice.Number} saved.");
+                string checkedOutUser = user.Username;
+                _cart.Clear();
+                CartPersistence.Delete(checkedOutUser);
             }
             catch (Exception ex)
             {
                 Logger.Error($"Invoice PDF wasn't generated due to : {ex.Message}");
                 Logger.Error(ex.ToString());
-                Console.WriteLine("\n[ERROR] Payment done, but the PDF could not be created.");
-                Notifier.Error("Payment done, but the invoice PDF could not be created.");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("\n[ERROR] Payment processing failed or invoice PDF could not be created.");
+                Console.WriteLine("Your cart items have been saved. Please contact support or try again.");
+                Console.ResetColor();
+                Notifier.Error("Payment pipeline error. Cart preserved.");
             }
-
-            string checkedOutUser = user.Username;
-            _cart.Clear();
-            CartPersistence.Delete(checkedOutUser);
 
             Console.WriteLine("Press any key to continue...");
             Console.ReadKey(true);
             return true;
         }
+
 
 
         private Address? ChooseAddress()
@@ -1086,11 +1125,12 @@ Total    : Rs. {_cart.GrandTotal:N2}/-");
 
             if (maxLength <= 3)
             {
-                return "...";
+                return new string('.', Math.Max(0, maxLength));
             }
 
             string truncatedText = input[..(maxLength - 3)];
             return truncatedText + "...";
         }
+
     }
 }

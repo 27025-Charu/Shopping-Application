@@ -10,6 +10,7 @@ namespace ShoppingApplication.Repository
 
         private readonly List<Product> _products;
         private readonly List<Coupon> _coupons;
+        private readonly object _lock = new();
 
         public ProductRepository()
         {
@@ -29,17 +30,44 @@ namespace ShoppingApplication.Repository
 
         public List<Product> GetAll()
         {
-            return _products;
+            lock (_lock)
+            {
+                return _products;
+            }
         }
 
         public Product? GetById(string id)
         {
-            return _products.FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+            lock (_lock)
+            {
+                var prod = _products.FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+                if (prod == null) return null;
+
+                return new Product
+                {
+                    Id = prod.Id,
+                    Name = prod.Name,
+                    Category = prod.Category,
+                    Price = prod.Price,
+                };
+            }
         }
 
         public Coupon? GetCouponByCode(string code)
         {
-            return _coupons.FirstOrDefault(c => c.Code.Equals(code, StringComparison.OrdinalIgnoreCase) && c.IsActive);
+            lock (_lock)
+            {
+                var coupon = _coupons.FirstOrDefault(c => c.Code.Equals(code, StringComparison.OrdinalIgnoreCase) && c.IsActive);
+                if (coupon == null) return null;
+
+                return new Coupon
+                {
+                    Code = coupon.Code,
+                    DiscountType = coupon.DiscountType,
+                    Value = coupon.Value,
+                    IsActive = coupon.IsActive
+                };
+            }
         }
 
         private static List<Product> SeedProducts() => new()
@@ -57,7 +85,7 @@ namespace ShoppingApplication.Repository
 
         private static List<Coupon> SeedCoupons() => new()
         {
-            new() { Code = "WELCOME10", DiscountType = "Percentage", Value = 10, IsActive = true },
+            new() { Code = "CLOTHING10", DiscountType = "Percentage", Value = 10, IsActive = true },
             new() { Code = "GAMER20",   DiscountType = "Percentage", Value = 20, IsActive = true },
             new() { Code = "FLAT500",   DiscountType = "Flat",       Value = 500, IsActive = true },
             new() { Code = "EXPIRED5",  DiscountType = "Percentage", Value = 5,  IsActive = false }

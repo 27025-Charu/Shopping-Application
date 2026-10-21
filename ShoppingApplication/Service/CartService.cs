@@ -23,12 +23,20 @@ namespace ShoppingApplication.Service
                 {
                     return 0;
                 }
-                return AppliedCoupon.DiscountType switch
+                decimal rawDiscount = AppliedCoupon.DiscountType switch
                 {
-                    "Percentage" => SubTotal * (AppliedCoupon.Value / 100m),
-                    "Flat" => AppliedCoupon.Value > SubTotal ? SubTotal : AppliedCoupon.Value,
+                    "Percentage" => SubTotal * (Math.Clamp(AppliedCoupon.Value, 0m, 100m) / 100m),
+                    "Flat" => Math.Max(0m, AppliedCoupon.Value),
                     _ => 0m
                 };
+                if (rawDiscount > SubTotal)
+                {
+                    return SubTotal;
+                }
+                else
+                {
+                    return rawDiscount;
+                }
             }
         }
         public decimal GrandTotal => SubTotal - DiscountTotal;
@@ -72,6 +80,11 @@ namespace ShoppingApplication.Service
                 Logger.Info($"Product - {product.Name} removed from cart");
                 return;
             }
+            if (qty > MaxQty)
+            {
+                qty = MaxQty;
+            }
+
             var existed = _items.ContainsKey(product.Id);
             _items[product.Id] = new CartItem { Product = product, Quantity = qty };
             if (existed)

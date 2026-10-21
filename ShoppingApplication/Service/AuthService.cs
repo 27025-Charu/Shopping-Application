@@ -1,7 +1,6 @@
 ﻿using ShoppingApplication.Model;
 using ShoppingApplication.Repository;
 using ShoppingApplication.Service;
-using Spectre.Console;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,9 +10,8 @@ namespace ShoppingApplication
     internal class AuthService
     {
         public const int MaxAddresses = 5;
-
         private readonly UserRepository _repo;
-        CartService _cart;
+        private readonly CartService _cart;
         public User? CurrentUser { get; private set; }
 
         public AuthService(UserRepository repo, CartService cart)
@@ -44,16 +42,9 @@ namespace ShoppingApplication
         {
             if (CurrentUser != null)
             {
-                var confirmMessage = $"Are you sure you want to log out, [yellow]{Markup.Escape(CurrentUser.Username)}[/]?";
-                if (!AnsiConsole.Confirm(confirmMessage))
-                {
-                    Logger.Info($"Logout canceled by user: {CurrentUser.Username}");
-                    return false;
-                }
-
                 _cart.SaveSession(CurrentUser.Username);
                 _cart.Clear();
-                Logger.Info($"User - {CurrentUser.Username} logged out.");
+                Logger.Info($"User - {CurrentUser.Username} logged out successfully.");
             }
             CurrentUser = null;
             return true;
