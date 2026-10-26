@@ -754,8 +754,9 @@ Choice: ");
             }
             if (quantity == 0)
             {
-                bool confirmRemoval = AnsiConsole.Confirm($"Are you sure you want to remove {Markup.Escape(product.Name)}[/] from your cart?");
-                if (!confirmRemoval)
+                //bool confirmRemoval = AnsiConsole.Confirm($"Are you sure you want to remove {Markup.Escape(product.Name)} from your cart?");
+                var confirmRemoval = $"Are you sure you want to remove, [yellow]{Markup.Escape(product.Name)} from your cart?[/]";
+                if (!AnsiConsole.Confirm(confirmRemoval))
                 {
                     Logger.Info($"Removal of {product.Name} canceled by user.");
                     Notifier.Success("Action canceled. Item remains in your cart.");
